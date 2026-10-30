@@ -7,7 +7,7 @@ export const NAV = [
     items: [
       { id: 'overview', label: 'Overview' },
       { id: 'docker', label: 'Docker' },
-      { id: 'vms', label: 'VMs' },
+      { id: 'vms', label: 'VMs', built: true },
       { id: 'array', label: 'Array & disks' },
       { id: 'files', label: 'Shares & files' },
       { id: 'terminal', label: 'Terminal' },

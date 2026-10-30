@@ -5,6 +5,7 @@ import ConnectDialog from './ConnectDialog.jsx';
 import Home from './pages/Home.jsx';
 import Hermes from './pages/Hermes.jsx';
 import NotBuilt from './pages/NotBuilt.jsx';
+import Remote from './pages/Remote.jsx';
 import { checkConnection, usePoll } from './lib/api.js';
 import { demoContainerCount, demoNeeds, demoServer } from './lib/demo.js';
 import { needsFromServer } from './lib/needs.js';
@@ -15,6 +16,11 @@ export default function App() {
   const [page, setPage] = useState('home');
   const [hermesTab, setHermesTab] = useState('agents');
   const [draft, setDraft] = useState('');
+  // The VMs page stays open once visited, so its screens stay connected.
+  const [remoteOpen, setRemoteOpen] = useState(false);
+  useEffect(() => {
+    if (page === 'vms') setRemoteOpen(true);
+  }, [page]);
 
   const refresh = useCallback(async () => setConn(await checkConnection()), []);
   useEffect(() => {
@@ -44,7 +50,7 @@ export default function App() {
   if (page === 'home') content = <Home conn={conn} needs={needs} onAsk={askHermes} onPage={setPage} />;
   else if (page === 'hermes')
     content = <Hermes conn={conn} tab={hermesTab} onTab={setHermesTab} draft={draft} onDraftUsed={() => setDraft('')} />;
-  else content = <NotBuilt page={page} />;
+  else if (page !== 'vms') content = <NotBuilt page={page} />;
 
   return (
     <div className="app hex">
@@ -59,7 +65,12 @@ export default function App() {
           )}
         </TopBar>
         <div className="edge" />
-        <div className="page-scroll">{content}</div>
+        {content && <div className="page-scroll">{content}</div>}
+        {remoteOpen && (
+          <div className="page-scroll" hidden={page !== 'vms'}>
+            <Remote conn={conn} shown={page === 'vms'} />
+          </div>
+        )}
       </main>
       {connecting && <ConnectDialog conn={conn} onClose={() => setConnecting(false)} onChanged={refresh} />}
     </div>

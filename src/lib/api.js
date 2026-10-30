@@ -97,3 +97,8 @@ export function usePoll(path, { enabled = true, every = 0 } = {}) {
   const reload = useCallback(() => setTick((t) => t + 1), []);
   return { ...state, reload };
 }
+
+// While a remote screen has the keyboard, the app's own shortcuts (reload,
+// close, quit) go to the remote computer instead.
+export const captureKeys = (on) => bridge?.captureKeys?.(Boolean(on));
+export const openExternal = (url) => (bridge ? bridge.openExternal(url) : window.open(url, '_blank', 'noopener'));

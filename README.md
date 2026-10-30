@@ -18,6 +18,14 @@ connected, every page shows sample data and says so.
   approvals and activity (sample agents for now; the settings are saved on
   this computer); Chat with your Hermes chats, including Telegram ones;
   Models. Studio, Tools and Memory are next.
+- **VMs** (remote control): one page with two tabs. **VM console** shows a
+  VM's own screen (VNC, the console Unraid opens) with Ctrl+Alt+Del and other
+  keys, paste-by-typing, snapshots, fit or 1:1, picture quality and full
+  screen. **RDP** opens a computer's desktop through guacd, the Guacamole
+  container Home-Dashboard's Remote page already uses, and can add computers
+  and wake sleeping ones. Both tabs stay connected while you switch tabs or
+  pages, and while a screen has the keyboard the app's own shortcuts (reload,
+  close) go to the remote computer.
 - Every other page says what it will do. They haven't been designed yet.
 
 ## Running it
@@ -45,6 +53,9 @@ npm test
   makes every `/api/...` request itself, so the sign-in cookie lives in
   Electron's cookie jar and there are no CORS problems.
 - `electron/preload.cjs` gives the page a small `window.cubecrusher` bridge.
+- The VMs page's screens are WebSockets from the page to the server. The
+  main process adds the sign-in cookie and the Origin the server checks to
+  those sockets (only for the configured server's `/api/` paths).
 - `src/` is the React app. `src/steeze/` is a copy of the Steeze tokens,
   components and fonts.
 

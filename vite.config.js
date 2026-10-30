@@ -6,9 +6,13 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   base: './',
+  // noVNC (the VMs page) waits at the top level of a module, which needs ES2022.
+  build: { target: 'es2022' },
+  optimizeDeps: { esbuildOptions: { target: 'es2022' } },
   server: {
     port: 5180,
     strictPort: true,
-    proxy: { '/api': process.env.HOME_DASHBOARD_URL || 'http://localhost:3000' },
+    // ws: the VMs page's screens are WebSockets under /api.
+    proxy: { '/api': { target: process.env.HOME_DASHBOARD_URL || 'http://localhost:3000', ws: true } },
   },
 });

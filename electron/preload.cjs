@@ -5,5 +5,6 @@ contextBridge.exposeInMainWorld('cubecrusher', {
   getSettings: () => ipcRenderer.invoke('settings:get'),
   setSettings: (next) => ipcRenderer.invoke('settings:set', next),
   openExternal: (url) => ipcRenderer.invoke('open:external', url),
+  captureKeys: (on) => ipcRenderer.send('keys:capture', on),
   platform: process.platform,
 });

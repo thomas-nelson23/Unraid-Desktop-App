@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, net, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, net, session, shell } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 
@@ -62,6 +62,33 @@ ipcMain.handle('open:external', (_event, url) => {
   if (/^https?:\/\//.test(url)) shell.openExternal(url);
 });
 
+// The VMs page's screens are WebSockets straight from the page to the server.
+// The page isn't served by the server, so the browser would send neither the
+// sign-in cookie (it's SameSite) nor an Origin the server accepts. Add both,
+// for the configured server's /api/ sockets only.
+function signScreenSockets() {
+  session.defaultSession.webRequest.onBeforeSendHeaders(async (details, callback) => {
+    try {
+      if (!settings.serverUrl || !/^wss?:/.test(details.url)) return callback({});
+      const server = new URL(settings.serverUrl);
+      const url = new URL(details.url);
+      if (url.host !== server.host || !url.pathname.startsWith('/api/')) return callback({});
+      const cookies = await session.defaultSession.cookies.get({ url: settings.serverUrl });
+      const requestHeaders = { ...details.requestHeaders, Origin: server.origin };
+      if (cookies.length) requestHeaders.Cookie = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+      callback({ requestHeaders });
+    } catch {
+      callback({});
+    }
+  });
+}
+
+// While a remote screen has the keyboard, Ctrl+R, Ctrl+W and the like go to
+// the remote computer instead of reloading or closing the app.
+ipcMain.on('keys:capture', (event, on) => {
+  event.sender.setIgnoreMenuShortcuts(Boolean(on));
+});
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1440,
@@ -94,6 +121,7 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   await loadSettings();
+  signScreenSockets();
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
