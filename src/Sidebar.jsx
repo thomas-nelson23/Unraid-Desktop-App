@@ -9,7 +9,7 @@ export default function Sidebar({ page, onPage, counts }) {
         </span>
       </div>
       {NAV.map((group, i) => (
-        <div className="group" key={group.title ?? i}>
+        <div className={`group${i === NAV.length - 1 ? ' bottom' : ''}`} key={group.title ?? i}>
           {group.title && <span className="eyebrow">{group.title}</span>}
           {group.items.map((item) => (
             <button

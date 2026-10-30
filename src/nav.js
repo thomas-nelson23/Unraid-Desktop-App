@@ -6,7 +6,7 @@ export const NAV = [
     title: 'Server',
     items: [
       { id: 'overview', label: 'Overview' },
-      { id: 'docker', label: 'Docker' },
+      { id: 'docker', label: 'Docker', built: true },
       { id: 'vms', label: 'VMs' },
       { id: 'array', label: 'Array & disks' },
       { id: 'files', label: 'Shares & files' },
@@ -30,6 +30,7 @@ export const NAV = [
       { id: 'notes', label: 'Notes & wiki' },
     ],
   },
+  { items: [{ id: 'settings', label: 'Settings', built: true }] },
 ];
 
 export const PAGE_LABEL = Object.fromEntries(NAV.flatMap((g) => g.items.map((i) => [i.id, i.label])));

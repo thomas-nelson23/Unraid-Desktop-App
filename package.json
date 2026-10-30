@@ -28,7 +28,10 @@
     "vite": "^6.4.5",
     "wait-on": "^8.0.5"
   },
-  "author": "Thomas Nelson",
+  "author": {
+    "name": "Thomas Nelson",
+    "email": "te.nelson993@gmail.com"
+  },
   "build": {
     "appId": "com.thomasnelson.cubecrusher",
     "productName": "Cubecrusher",

@@ -141,3 +141,30 @@ export const demoActivity = [
   { at: '11:15', who: 'curator', what: 'Removed 3 stalled torrents' },
   { at: '09:00', who: 'warden', what: 'Morning report sent to Telegram' },
 ];
+
+// Sample containers for the Docker page before the app is connected.
+export const demoContainers = [
+  ['plex', 'Plex', 'plexinc/pms-docker', 'running', 'Up 12 days (healthy)', 'healthy', 'host', null, 'http://192.168.1.10:32400/web'],
+  ['binhex-radarr', 'Radarr', 'binhex/arch-radarr', 'running', 'Up 12 days', null, 'bridge', '172.17.0.4', 'http://192.168.1.10:7878/'],
+  ['binhex-sonarr', 'Sonarr', 'binhex/arch-sonarr', 'running', 'Up 12 days', null, 'bridge', '172.17.0.5', 'http://192.168.1.10:8989/'],
+  ['binhex-qbittorrentvpn', 'qBittorrent VPN', 'binhex/arch-qbittorrentvpn', 'running', 'Up 3 hours (unhealthy)', 'unhealthy', 'bridge', '172.17.0.6', 'http://192.168.1.10:8080/'],
+  ['ollama', 'Ollama', 'ollama/ollama', 'running', 'Up 2 days', null, 'bridge', '172.17.0.9', null],
+  ['comfyui', 'ComfyUI', 'ghcr.io/ai-dock/comfyui', 'running', 'Up 2 days', null, 'bridge', '172.17.0.10', 'http://192.168.1.10:8188/'],
+  ['hermes-agent', 'Hermes Agent', 'nousresearch/hermes-agent', 'running', 'Up 5 days', null, 'bridge', '172.17.0.11', null],
+  ['hermes-agent-2', 'Hermes Agent 2', 'nousresearch/hermes-agent', 'running', 'Up 1 day', null, 'bridge', '172.17.0.12', null],
+  ['home-assistant', 'Home Assistant', 'homeassistant/home-assistant', 'running', 'Up 5 days', null, 'br0', '192.168.1.21', 'http://192.168.1.21:8123/'],
+  ['nextcloud', 'Nextcloud', 'linuxserver/nextcloud', 'exited', 'Exited (0) 2 days ago', null, 'bridge', null, 'https://192.168.1.10:444/'],
+  ['tautulli', 'Tautulli', 'linuxserver/tautulli', 'paused', 'Up 12 days (Paused)', null, 'bridge', '172.17.0.7', 'http://192.168.1.10:8181/'],
+].map(([name, displayName, image, state, status, health, networkMode, ip, webui], i) => ({
+  id: `sample${i}`.padEnd(12, '0'),
+  name,
+  displayName,
+  image,
+  state,
+  status,
+  health,
+  networkMode,
+  networks: [{ name: networkMode, ip }],
+  ports: [],
+  webui,
+}));
