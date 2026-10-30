@@ -4,11 +4,39 @@ import TopBar from './TopBar.jsx';
 import ConnectDialog from './ConnectDialog.jsx';
 import Home from './pages/Home.jsx';
 import Hermes from './pages/Hermes.jsx';
+import Docker from './pages/Docker.jsx';
+import Settings from './pages/Settings.jsx';
 import NotBuilt from './pages/NotBuilt.jsx';
 import Remote from './pages/Remote.jsx';
-import { checkConnection, usePoll } from './lib/api.js';
+import { checkConnection, desktop, usePoll } from './lib/api.js';
 import { demoContainerCount, demoNeeds, demoServer } from './lib/demo.js';
 import { needsFromServer } from './lib/needs.js';
+
+const EMPTY_HERMES = { instances: [], current: null, status: [] };
+
+// The Hermes instances and whether each one answers, kept at the top so the
+// Hermes page and Settings see the same list.
+function useHermesList() {
+  const [list, setList] = useState(EMPTY_HERMES);
+  const refresh = useCallback(async (next) => {
+    if (!desktop) return;
+    const l = next || (await desktop.hermes.list());
+    setList((s) => ({ ...l, status: s.status }));
+    try {
+      const status = await desktop.hermes.status();
+      setList((s) => ({ ...s, status }));
+    } catch {
+      // The page says "checking" until a later refresh.
+    }
+  }, []);
+  useEffect(() => {
+    refresh();
+    const timer = setInterval(() => refresh(), 60_000);
+    return () => clearInterval(timer);
+  }, [refresh]);
+  const switchTo = async (id) => refresh(await desktop.hermes.setCurrent(id));
+  return { list, refresh, switchTo };
+}
 
 export default function App() {
   const [conn, setConn] = useState({ state: 'demo', reason: 'none' });
@@ -16,6 +44,7 @@ export default function App() {
   const [page, setPage] = useState('home');
   const [hermesTab, setHermesTab] = useState('agents');
   const [draft, setDraft] = useState('');
+  const hermes = useHermesList();
   // The VMs page stays open once visited, so its screens stay connected.
   const [remoteOpen, setRemoteOpen] = useState(false);
   useEffect(() => {
@@ -45,11 +74,13 @@ export default function App() {
     setHermesTab('chat');
     setPage('hermes');
   };
+  const onDraftUsed = useCallback(() => setDraft(''), []);
 
   let content;
   if (page === 'home') content = <Home conn={conn} needs={needs} onAsk={askHermes} onPage={setPage} />;
-  else if (page === 'hermes')
-    content = <Hermes conn={conn} tab={hermesTab} onTab={setHermesTab} draft={draft} onDraftUsed={() => setDraft('')} />;
+  else if (page === 'hermes') content = <Hermes tab={hermesTab} onTab={setHermesTab} draft={draft} onDraftUsed={onDraftUsed} hermesList={hermes.list} onSwitch={hermes.switchTo} onPage={setPage} />;
+  else if (page === 'docker') content = <Docker conn={conn} onPage={setPage} />;
+  else if (page === 'settings') content = <Settings conn={conn} onConnect={() => setConnecting(true)} hermesList={hermes.list} onHermesChanged={hermes.refresh} />;
   else if (page !== 'vms') content = <NotBuilt page={page} />;
 
   return (

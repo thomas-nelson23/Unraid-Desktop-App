@@ -5,6 +5,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 const bridge = typeof window !== 'undefined' ? window.cubecrusher : undefined;
 export const inElectron = Boolean(bridge);
 
+// The desktop-only parts: Hermes instances, Docker servers and updates. In a
+// plain browser they are null and the pages say so.
+export const desktop = bridge ? { hermes: bridge.hermes, docker: bridge.docker, updates: bridge.updates, platform: bridge.platform } : null;
+export const openExternal = (url) => (bridge ? bridge.openExternal(url) : window.open(url, '_blank', 'noopener'));
+
 export class ApiError extends Error {
   constructor(message, status) {
     super(message);
@@ -101,4 +106,3 @@ export function usePoll(path, { enabled = true, every = 0 } = {}) {
 // While a remote screen has the keyboard, the app's own shortcuts (reload,
 // close, quit) go to the remote computer instead.
 export const captureKeys = (on) => bridge?.captureKeys?.(Boolean(on));
-export const openExternal = (url) => (bridge ? bridge.openExternal(url) : window.open(url, '_blank', 'noopener'));

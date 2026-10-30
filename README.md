@@ -16,8 +16,15 @@ connected, every page shows sample data and says so.
   disks and hot GPUs); weather and today's calendar.
 - **Hermes** (design option 2): Agents with In / Near / Out autonomy,
   approvals and activity (sample agents for now; the settings are saved on
-  this computer); Chat with your Hermes chats, including Telegram ones;
-  Models. Studio, Tools and Memory are next.
+  this computer); Chat, which streams the reply as Hermes works and lets you
+  allow or deny a command it asks about; Models. The app talks to each
+  Hermes Agent container directly, and a switcher on the page picks which
+  one. Studio, Tools and Memory are next.
+- **Docker:** containers on Cubecrusher through the dashboard (read only),
+  and on any machine added under Settings over SSH, where the app can start,
+  stop, restart and read logs. The app uses the SSH keys on this computer.
+- **Settings:** the dashboard server, Hermes instances, Docker servers, and
+  in-app updates: pick a branch and install its latest GitHub Actions build.
 - **VMs** (remote control): one page with two tabs. **VM console** shows a
   VM's own screen (VNC, the console Unraid opens) with Ctrl+Alt+Del and other
   keys, paste-by-typing, snapshots, fit or 1:1, picture quality and full
@@ -49,9 +56,12 @@ npm test
 
 ## How it fits together
 
-- `electron/main.cjs` keeps the server address in the app's config folder and
-  makes every `/api/...` request itself, so the sign-in cookie lives in
-  Electron's cookie jar and there are no CORS problems.
+- `electron/main.cjs` opens the window; `settings.cjs` keeps what's set up
+  in the app's config folder; `dashboard.cjs` makes every `/api/...` request
+  to Home-Dashboard, so the sign-in cookie lives in Electron's cookie jar and
+  there are no CORS problems; `hermes.cjs` talks to Hermes Agent's API;
+  `docker.cjs` runs `docker` over SSH; `updates.cjs` fetches builds from
+  GitHub Actions.
 - `electron/preload.cjs` gives the page a small `window.cubecrusher` bridge.
 - The VMs page's screens are WebSockets from the page to the server. The
   main process adds the sign-in cookie and the Origin the server checks to
