@@ -168,3 +168,74 @@ export const demoContainers = [
   ports: [],
   webui,
 }));
+
+// Sample Overview: the array's disks, its monthly growth, the last 24 hours
+// and what's coming tonight.
+export const demoDisks = [
+  ['Parity', 'parity', 12, 12, 38, 'WD Red Pro · valid, checked Oct 2'],
+  ['Disk 1', 'data', 12, 9.7, 36, 'WD Red Pro · 2.1 years'],
+  ['Disk 2', 'data', 12, 9.5, 37, 'IronWolf · spun down'],
+  ['Disk 3', 'data', 8, 5.9, 41, 'WD Red Plus · warmest disk'],
+  ['Disk 4', 'data', 8, 5.4, 35, 'WD Red Plus · spun down'],
+  ['Disk 5', 'data', 6, 4.0, 34, 'IronWolf · spun down'],
+  ['Disk 6', 'data', 4, 3.7, 39, 'WD Red · 5.1 years · nearly full'],
+  ['Cache', 'pool', 2, 1.22, 44, 'Samsung 990 Pro NVMe · mover 3 AM'],
+].map(([label, role, total, used, temp, note]) => ({ label, role, total: total * TB, used: used * TB, temp, note }));
+
+// Array use at the start of each month, oldest first, ending now.
+export function demoArrayHistory() {
+  const used = [27.5, 28.4, 29.6, 30.8, 32.1, 33.2, 34.6, 35.9, 37.0, 38.2];
+  const now = Date.now();
+  return used.map((u, i) => ({ at: now - (used.length - 1 - i) * 30.44 * 86400e3, used: u * TB }));
+}
+
+export const demoArraySuggestions = [
+  {
+    id: 'disk6',
+    tone: 'watch',
+    title: 'Replace Disk 6 with a 12 TB drive',
+    body: 'It\'s 4 TB, 93% full and 5.1 years old. A 12 TB swap adds 8 TB and pushes "full" to mid-2028.',
+    ask: 'How do I replace Disk 6 with a bigger drive?',
+  },
+  {
+    id: 'parity-comfy',
+    tone: 'calm',
+    title: "Pause ComfyUI during tonight's parity check",
+    body: 'Both read Disk 3 heavily; parity would take about 2 h longer.',
+    ask: "Move ComfyUI's jobs before parity",
+  },
+];
+
+// 48 half-hour cells for the last 24 hours, 0–1, with a few busy spells.
+function spells(base, peaks) {
+  return Array.from({ length: 48 }, (_, i) => {
+    let v = base;
+    for (const [at, height, width] of peaks) {
+      const d = Math.abs(i - at);
+      if (d < width) v += height * (1 - d / width);
+    }
+    return Math.min(0.95, v);
+  });
+}
+
+export function demoLanes() {
+  return [
+    { id: 'cpu', label: 'CPU', color: '0, 229, 255', cells: spells(0.12, [[10, 0.5, 5], [26, 0.3, 4], [40, 0.25, 6]]) },
+    { id: 'gpu', label: 'GPU', color: '255, 43, 214', cells: spells(0.06, [[2, 0.7, 6], [28, 0.4, 4], [46, 0.8, 6]]) },
+    { id: 'ram', label: 'RAM', color: '92, 156, 255', cells: spells(0.55, [[28, 0.1, 6], [46, 0.12, 6]]) },
+  ];
+}
+
+// Moments on the 24-hour timeline, as fractions of the day from 24 h ago.
+export const demoMoments = [
+  { at: 0.06, time: '5:40 AM', label: 'Backup to B2' },
+  { at: 0.38, time: '1:40 PM', label: 'Cache at 97%' },
+  { at: 0.54, time: '3:00 PM', label: 'Mover ran' },
+  { at: 0.82, time: '12:00 AM', label: 'ComfyUI batch', mag: true },
+];
+
+export const demoUpcoming = [
+  { time: '12:00', what: 'ComfyUI batch · 2 jobs', where: 'GPU' },
+  { time: '2:00', what: 'Parity check · about 9 h', where: 'Array' },
+  { time: '3:00', what: 'Mover', where: 'Cache' },
+];

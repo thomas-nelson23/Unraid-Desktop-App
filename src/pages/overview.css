@@ -1,0 +1,222 @@
+/* Overview (design option 4, "Story"). Uses the Hermes page's .ph, .tabs,
+   .hbody and .hrow, and Home's .ask and .chip. */
+.ov-story,
+.ov-timeline,
+.ov-askcard,
+.ov-upcoming,
+.ov-suggest,
+.ov-disks {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ov-lead {
+  margin: 0;
+  max-width: 760px;
+  font: 17px/1.5 var(--font-sans);
+  color: var(--text-soft);
+}
+.ov-lead b {
+  font-weight: 500;
+  color: var(--text-bright);
+}
+.ov-mark {
+  display: inline-block;
+  flex: none;
+  width: 3px;
+  height: 10px;
+  border-radius: 1px;
+  background: var(--k);
+}
+.ov-verdicts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+.ov-verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  background: var(--well);
+  border: 1px solid var(--hair);
+  border-radius: 2px;
+}
+.ov-verdict .eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ov-verdict b {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-bright);
+}
+.ov-verdict.row-item {
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+}
+.ov-verdict.row-item > div {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ov-verdict.row-item b {
+  font-size: 14px;
+}
+
+/* Last 24 hours: one lane of half-hour cells per reading. */
+.ov-timeline .card-head {
+  margin: 0;
+}
+.ov-timeline p {
+  margin: 0;
+}
+.ov-scroll {
+  overflow-x: auto;
+}
+.ov-lanes {
+  min-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ov-lane {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  align-items: center;
+  gap: 12px;
+}
+.ov-cells {
+  display: grid;
+  grid-template-columns: repeat(48, minmax(0, 1fr));
+  gap: 2px;
+}
+.ov-cells span {
+  height: 18px;
+  border-radius: 1px;
+}
+.ov-cells span.empty {
+  background: var(--well);
+}
+.ov-pins {
+  position: relative;
+  height: 40px;
+}
+.ov-pin {
+  position: absolute;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 6px;
+  border-left: 1px solid var(--cyan);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.ov-pin.mag {
+  border-left-color: var(--mag);
+}
+
+.ov-askcard {
+  flex: 999 1 480px;
+  min-width: 0;
+}
+.ov-askcard .ask {
+  margin: 0;
+}
+.ov-upcoming,
+.ov-disks {
+  flex: 1 0 300px;
+  gap: 8px;
+}
+.ov-disks {
+  flex-basis: 380px;
+}
+.ov-upcoming p {
+  margin: 0;
+}
+.ov-suggest {
+  flex: 999 1 480px;
+  min-width: 0;
+}
+.ov-suggest p {
+  margin: 0;
+}
+.ov-list {
+  display: flex;
+  flex-direction: column;
+}
+.ov-li {
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid var(--hair);
+}
+.ov-time {
+  color: var(--cyan);
+}
+.ov-disk {
+  grid-template-columns: 64px 1fr 52px;
+}
+.ov-disk b {
+  font-weight: 500;
+  color: var(--text-bright);
+}
+.ov-disk > span:last-child {
+  text-align: right;
+}
+.ov-bar {
+  display: block;
+  height: 4px;
+  margin-bottom: 4px;
+  background: var(--well);
+  border-radius: 1px;
+  overflow: hidden;
+}
+.ov-bar i {
+  display: block;
+  height: 100%;
+}
+
+/* Array growth by month, with the projection drawn as dashed outlines. */
+.ov-forecast {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 170px;
+  border-bottom: 1px solid var(--hair);
+  background-image: linear-gradient(var(--hair) 1px, transparent 1px);
+  background-size: 100% 42.5px;
+}
+.ov-forecast span {
+  flex: 1;
+  border-radius: 1px 1px 0 0;
+  background: var(--cyan-45);
+}
+.ov-forecast span.now {
+  background: var(--cyan);
+}
+.ov-forecast span.future {
+  background: transparent;
+  border: 1px dashed var(--cyan-50);
+  border-bottom: 0;
+}
+.ov-forecast .ov-cap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border: 0;
+  border-top: 1px dashed var(--red-text);
+  background: none;
+}
+.ov-axis {
+  display: flex;
+  justify-content: space-between;
+}
