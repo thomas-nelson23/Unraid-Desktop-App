@@ -47,3 +47,17 @@ npm test
 - `electron/preload.cjs` gives the page a small `window.cubecrusher` bridge.
 - `src/` is the React app. `src/steeze/` is a copy of the Steeze tokens,
   components and fonts.
+
+## Installers
+
+`npm run dist:mac`, `dist:win` or `dist:linux` builds an installer into
+`release/`. Every push also builds all three on GitHub Actions (Mac, Windows,
+Linux); download them from the run's **Artifacts**.
+
+The Mac app isn't notarized by Apple yet, so the first time, right-click it
+and choose **Open**. If macOS says it's damaged, run this once in Terminal:
+
+```sh
+xattr -cr /Applications/Cubecrusher.app
+codesign --force --deep -s - /Applications/Cubecrusher.app
+```

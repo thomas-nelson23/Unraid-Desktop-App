@@ -11,16 +11,69 @@
     "dev:web": "vite",
     "build": "vite build",
     "start": "electron .",
-    "test": "node --test src/lib/*.test.js"
+    "test": "node --test src/lib/*.test.js",
+    "dist": "vite build && electron-builder",
+    "dist:mac": "vite build && electron-builder --mac",
+    "dist:win": "vite build && electron-builder --win",
+    "dist:linux": "vite build && electron-builder --linux"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.7.0",
     "concurrently": "^9.2.5",
     "cross-env": "^7.0.3",
     "electron": "^38.8.6",
+    "electron-builder": "^26.18.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "vite": "^6.4.5",
     "wait-on": "^8.0.5"
+  },
+  "author": "Thomas Nelson",
+  "build": {
+    "appId": "com.thomasnelson.cubecrusher",
+    "productName": "Cubecrusher",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "electron/**",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "identity": "-",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "pacman"
+      ],
+      "category": "System"
+    },
+    "publish": null
   }
 }
