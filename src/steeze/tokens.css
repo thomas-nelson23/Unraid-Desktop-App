@@ -1,0 +1,469 @@
+/* Steeze — generated from tokens.json */
+:root, [data-theme="dark"] {
+  --bg: #021d2e; /* The window field behind everything: the deep ocean blue. Dark-only; there is no light theme. On a page, a slide or the cover it carries the hexagon grid (`hex-line`). */
+  --panel: #040e16; /* Solid ink: tooltips, the combo popup, cards, slide panels, the top of a strip's gradient. Also QPalette Button and Window. */
+  --base: #030a10; /* QPalette Base: the ground inside text fields and lists. */
+  --sidebar: #040c13; /* The settings sidebar fill, with a `hair-strong` left edge. */
+  --well: #01070b; /* Recessed wells: the fader groove, the meter bed, channel name tags, the matrix cells, code. Darker than `panel` so a thing sits *in* it. */
+  --ink: rgba(4, 12, 18, 0.62); /* Top stop of a strip's gradient and the segmented control's fill: ink over `bg`, slightly transparent so the field shows through. */
+  --ink-deep: rgba(4, 12, 18, 0.93); /* Bottom stop (70%) of a strip's gradient; the scrim under a full-bleed photo on a slide. */
+  --ink-6: rgba(4, 12, 18, 0.6); /* Fill of the top-bar status readout, the submix combo and the segmented control. */
+  --ink-7: rgba(1, 7, 11, 0.7); /* Fill of a strip's two readouts (`lcd`). */
+  --menu: rgba(4, 12, 18, 0.97); /* Context and preset menus, dialogs and toasts, with a `hair-strong` border. */
+  --hair: rgba(255, 255, 255, 0.07); /* The default hairline: strip edges, section tops, combo and readout borders, menu separators, table rows. */
+  --hair-strong: rgba(255, 255, 255, 0.16); /* Borders that must be found: the chamfered frame of a button, card or dialog; menus, tooltips, the sidebar edge, filled preset slots, table heads. */
+  --hair-9: rgba(255, 255, 255, 0.09); /* Border of the small strip buttons (S / M / ST) and the strip's settings button; hover fill of a checked segment. */
+  --hair-18: rgba(255, 255, 255, 0.18); /* Hovered border of a small strip button. */
+  --wash: rgba(255, 255, 255, 0.035); /* Fill of combos, spin boxes, line edits and checkbox wells on `bg` or `sidebar`; hover of a row, a menu item or a nav link. */
+  --wash-active: rgba(255, 255, 255, 0.12); /* Hovered fill of a checked segment or a dismiss button. */
+  --hex-line: rgba(255, 255, 255, 0.05); /* The hexagon grid drawn over `bg`: the ground of a page, a slide and the cover, never of a panel. Lines only — `.hex` in the bundle carries the tile; its stroke is this value written out, because a data URI cannot read a token. */
+  --text: #d9eef2; /* Body copy, values and button labels on `bg`, `panel`, `sidebar` and `well` (14:1 and up). */
+  --text-bright: #ffffff; /* Hovered labels, headings, figures, the current tab, the first word of the wordmark. */
+  --text-soft: #9cc7cf; /* Secondary copy: menu items, readouts (`lcd`), leads, dialog bodies. 9.5:1 on `bg`. */
+  --text-dim: #7d9299; /* Keys in a settings row, captions, eyebrows, table heads, the pan value, unchecked segments, placeholders, help and notes. 5.2:1 on `bg`. */
+  --text-muted: #58707a; /* Hints, fader scale marks, disabled labels, slide numbers. 3.2:1 on `bg` — below 4.5:1 on purpose; never for anything a person must read. */
+  --text-tag: #eef6f8; /* Text and icon on a channel name tag (`well`). */
+  --btn-text: #8aa3ab; /* Label of a small strip button when off (6.8:1 on `btn`). */
+  --btn: #0a1821; /* Fill of a small strip button and the strip's settings button; the fill stays when the button lights. */
+  --btn-hover: #12293a; /* Hovered fill of a small strip button. */
+  --cyan: #00e5ff; /* The signal: what is on, chosen, focused or moving. Meters, the filled groove, a lit M, the current tab's bar, a selected row's bar, a lit label, a link, the one `.primary` fill. 11.2:1 on `bg`. Electric, not sky. */
+  --cyan-8: rgba(0, 229, 255, 0.08); /* Pressed fill of a button. */
+  --cyan-12: rgba(0, 229, 255, 0.12); /* Wash behind a selected menu item or matrix row label when a line alone would be lost. */
+  --cyan-25: rgba(0, 229, 255, 0.25); /* Scrollbar handle at rest (solid `cyan` on hover). */
+  --cyan-27: rgba(0, 229, 255, 0.27); /* The filled part of the fader groove below the cap. */
+  --cyan-45: rgba(0, 229, 255, 0.45); /* A sparkline's bars (the last one solid `cyan`). */
+  --cyan-50: rgba(0, 229, 255, 0.5); /* Hover and focus frame of buttons, combos, fields and checkboxes: the one interactivity cue, on every surface. */
+  --cyan-60: rgba(0, 229, 255, 0.6); /* Edge of the selected output strip (the submix being mixed) and a selected card. */
+  --teal: #0090b0; /* Quieter cyan for marks that must sit behind the signal: the deep end of a chart ramp, a secondary rule. 4.5:1 on `bg`: not for small text. */
+  --mag: #ff2bd6; /* The second light, lines only: the far end of the `edge` rule, the kind bar of a playback channel, chart series 2, the light trace on the cover and the title slide. Never a fill; as text only at 16px and over (5.4:1 on `bg`). */
+  --mag-50: rgba(255, 43, 214, 0.5); /* Magenta at half strength: the tail of a light trace, a hovered magenta line. */
+  --red: #ff2a4f; /* Alarm and arm: a clip light, a hot peak readout, the armed Store frame, the active preset slot, a `.danger` fill, a `.bad` message's mark, the second word of the wordmark. 4.2:1 on `bg` as text — use `red-text` for words. */
+  --red-text: #ff7a93; /* Red as text at 16px and under: an error line, a failing value in a table, the armed Store label, a lit gear (7.3:1 on `bg`). */
+  --brass: #d576e3; /* Solo and warning: the one warm colour, replacing the yellow. A lit S, the meter's warm band, a `.warn` message's mark and lead phrase, chart series 3. 7.7:1 on `bg`. */
+  --warn: var(--brass); /* Warning as a meaning: alias of `brass` so a rule can say `warn` and a reader knows why it is there. */
+  --on-cyan: #021012; /* Text on a `cyan` fill: the primary button, the pill CTA, highlighted text (10.9:1). */
+  --cap: #10242f; /* The fader cap: one flat fill with a `hair-strong` edge and a `cyan` index line. The three-stop gradient and the grip lines are gone. */
+  --cap-off: #0b1a24; /* A disabled fader cap. */
+  --knob: #0f2838; /* The pan knob body, flat, with a `hair-strong` edge. */
+  --meter-hot: var(--red); /* Meter gradient at 0 dBFS (top). */
+  --meter-warm: var(--brass); /* Meter gradient at 6% down. */
+  --meter-bright: #7fe9ff; /* Meter gradient at 20% down; hover of a `.primary` button. */
+  --meter: var(--cyan); /* Meter gradient at 45% down: the body of a normal signal. */
+  --meter-deep: #006b88; /* Meter gradient at the floor. */
+  --clip-off: #0f2430; /* The clip segment above a meter when it has not clipped (`red` when it has). */
+  --hold: #f5f5f7; /* The peak-hold line on a meter and the pan knob's pointer. */
+  --scale-zero: #e6f3f6; /* The 0 mark of the fader scale (the others are `text-muted`). */
+  --slot-empty: #3c5560; /* Number on an empty preset slot. Decorative (2.1:1): the `hair` border says the slot exists. */
+  --ch-red: var(--red); /* Channel palette (Neon night, 8 colours): identity a person picks for a strip, a tag bar, a matrix column or a chart series — never a state. Lightness runs 56–84 so no colour shouts over another. v11 `ch-red` stays. */
+  --ch-coral: #96f8ff; /* Channel palette: coral. Replaces v11 `ch-orange`. */
+  --ch-brass: var(--brass); /* Channel palette: brass. Replaces v11 `ch-amber`. */
+  --ch-sea: #3c4aa8; /* Channel palette: seafoam. Replaces v11 `ch-lime` and `ch-green`; there is no green. */
+  --ch-cyan: var(--cyan); /* Channel palette: cyan. Replaces v11 `ch-teal`. */
+  --ch-azure: #5c9cff; /* Channel palette: azure. Replaces v11 `ch-blue`. */
+  --ch-mag: var(--mag); /* Channel palette: magenta. Replaces v11 `ch-violet` and `ch-pink`. */
+  --ch-slate: #9cb0b8; /* Channel palette: slate. Replaces v11 `ch-grey`. */
+  --ok: var(--cyan); /* Success where silence will not do — a clock-sync mark, a `Message.ok` — is `cyan` with a ✓ drawn beside the word. Never green; healthy is otherwise silent. */
+  --link: var(--cyan); /* Links in prose and tables. Underlined on hover and focus only; visited is not distinguished. */
+  --focus: var(--cyan-50); /* The focus frame and hover frame on every control, on every surface. Keyboard focus and hover share one cue. */
+  --scrim: rgba(2, 29, 46, 0.72); /* The field under a Dialog: `bg` at 72%, so the page stays legible but clearly behind. */
+  --overlay-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); /* Under a toast or a menu on a page. A dialog has none: the scrim separates it, and a chamfered box clips its shadow. */
+}
+:root {
+  --space-1: 1px; /* Gap between meter bars; between a fader and its meter; between a name tag and its ⚙. */
+  --space-2: 2px; /* Gap between S / M / ST, between the two readouts, between knob and pan value; segmented control inset; the group colour bar's thickness on a strip. */
+  --space-3: 3px; /* Strip side padding and inner gaps; preset slot gap; button vertical padding. */
+  --space-4: 4px; /* Strip top and bottom padding; gap between strips and between a row's head and its strips; section row spacing; menu separator margin. */
+  --space-6: 6px; /* Menu padding; the gap between a key and its value in a settings grid; field horizontal padding. */
+  --space-8: 8px; /* Top-bar gaps; between a row's colour bar and its caption; combo horizontal padding. */
+  --space-10: 10px; /* Sidebar-button horizontal padding; the gap between the input and playback column groups of the matrix. */
+  --space-12: 12px; /* Pill-button horizontal padding; the fader's track inset from each end. */
+  --space-14: 14px; /* Section side padding and bottom padding; segmented button horizontal padding; readout horizontal padding. */
+  --space-18: 18px; /* Menu item horizontal padding. */
+  --space-28: 28px; /* Top padding of a section: room for its painted title above the controls. */
+  --space-20: 20px; /* Card padding; the gap between cards in a dashboard grid. */
+  --space-24: 24px; /* Dialog padding; the gap between a page's title block and its first card. */
+  --space-32: 32px; /* Between page sections; a form's gap between field groups. */
+  --space-48: 48px; /* Page top padding under the app bar; a slide's inner gap between heading and body. */
+  --space-64: 64px; /* Hero padding on a page; the gap between slide columns. */
+  --space-96: 96px; /* Slide margins on all four sides at 1920×1080. */
+  --radius-1: 1px; /* Bars and marks: a row header's bar, the status mark, a sparkline bar, the progress groove. */
+  --radius-2: 2px; /* The square corner: fields, combos, cells, tags, readouts, slots, menus, tooltips, messages, strips, the segmented control, code. Anything that is not a button, a card or a dialog. */
+  --radius-pill-md: 16px; /* The one pill: `.btn.cta` at 32px — a page's single call to action. Nothing else is round. */
+  --radius-pill-lg: 22px; /* `.btn.cta.lg` at 44px. */
+  --control-h: 22px; /* Height of pill buttons, slots and the segmented control at 11px type. */
+  --strip-w: 62px; /* A channel strip, fixed. */
+  --fader-w: 34px; /* The fader widget: groove, cap and the scale beside it. */
+  --fader-min-h: 60px; /* Shortest fader and meter; they grow with the window. */
+  --groove: 3px; /* Fader groove width; 1.5px cyan index line across the cap. */
+  --tag-h: 20px; /* A channel name tag; its icon is 13px. */
+  --strip-btn: 26px; /* Width of S / M / ST (17px when three must fit); all are 17px tall. */
+  --lcd-h: 15px; /* A strip readout. */
+  --slot: 22px; /* A preset slot, round. */
+  --meter-bar: 4px; /* One meter bar; the clip segment above it is 3px tall; segment lines every 3px. */
+  --key-col: 96px; /* The key column of a settings grid, so values line up across sections. */
+  --matrix-cell: 48px; /* Matrix cell width (24px tall); row labels are 84px wide, the column header 44px tall. */
+  --control-h-md: 32px; /* Buttons, fields, combos and tabs on pages and dashboards (control-md type). The desktop default outside the mixer. */
+  --control-h-lg: 44px; /* Touch targets and a page's single primary action (control-lg type). Apple's and Material's minimum for a finger. */
+  --target-min: 24px; /* Smallest pointer target on a page (WCAG 2.5.8). Below it only inside the mixer, where UI scale is the remedy. */
+  --row-h: 36px; /* A table row at reading size; `.table.dense` rows are 28px. */
+  --icon: 16px; /* Icon beside 13px text: in a 32px button, a table cell, a message. */
+  --icon-lg: 24px; /* Icon in a 44px control, an empty state, a stat tile; the channel icons' native size. */
+  --appbar-h: 44px; /* The app bar of a page: wordmark, navigation, actions, with the `edge` rule beneath. */
+  --measure: 640px; /* Maximum width of reading text (about 70 characters of `read`). */
+  --page-max: 1200px; /* Maximum content width of a page or dashboard; 16px side gutters at phone width. */
+  --sidebar-w: 270px; /* The settings sidebar and a page's secondary column. */
+  --dialog-w: 480px; /* A dialog's width; a confirm is 400px, a form dialog at most 560px. */
+  --slide-w: 1920px; /* Slide canvas width; every Deck type size is for this canvas. */
+  --slide-h: 1080px; /* Slide canvas height. */
+  --cut-sm: 5px; /* Chamfer on a 22px button: the 45° cut on the top-right and bottom-left corners. */
+  --cut-md: 8px; /* Chamfer on a 32px or 44px button. */
+  --cut-lg: 12px; /* Chamfer on a card, a dialog or a slide panel. */
+  --mark-w: 3px; /* Width of the status mark (`Led`) and a row header's bar. */
+  --mark-h: 10px; /* Height of the status mark beside 11–13px text (14px beside a message's first line). */
+  --hex-w: 36px; /* Width of one hexagon-grid tile on a page (pointy-top hexagon, circumradius 20.78px). The cover uses 48px, a slide 72px. */
+  --hex-h: 62.35px; /* Height of one hexagon-grid tile on a page (three circumradii). */
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "Geist Mono", "JetBrains Mono", "DejaVu Sans Mono", monospace;
+  --font-display: Michroma, sans-serif;
+  --text-display: 400 48px/1.1 var(--font-display);
+  --text-display-sm: 400 32px/1.15 var(--font-display);
+  --text-wordmark: 400 14px/1 var(--font-display);
+  --text-h1: 600 28px/1.2 var(--font-sans);
+  --text-h2: 600 22px/1.25 var(--font-sans);
+  --text-h3: 600 17px/1.3 var(--font-sans);
+  --text-h4: 600 14px/1.4 var(--font-sans);
+  --text-eyebrow: 500 11px/1.2 var(--font-mono);
+  --text-lead: 400 17px/1.5 var(--font-sans);
+  --text-read: 400 15px/1.55 var(--font-sans);
+  --text-read-sm: 400 13px/1.5 var(--font-sans);
+  --text-label: 500 13px/1.3 var(--font-sans);
+  --text-note: 400 12px/1.45 var(--font-sans);
+  --text-code: 400 13px/1.5 var(--font-mono);
+  --text-body: 400 12px/1.4 var(--font-sans);
+  --text-control: 400 11px/1 var(--font-sans);
+  --text-control-md: 400 13px/1 var(--font-sans);
+  --text-control-lg: 500 15px/1 var(--font-sans);
+  --text-btn-label: 500 11px/1 var(--font-mono);
+  --text-btn-label-md: 500 12px/1 var(--font-mono);
+  --text-btn-label-lg: 500 13px/1 var(--font-mono);
+  --text-tab: 500 12px/1 var(--font-mono);
+  --text-hint: 400 10px/1.3 var(--font-sans);
+  --text-section: 500 9px/1.2 var(--font-mono);
+  --text-caption: 500 8px/1.2 var(--font-mono);
+  --text-strip-name: 500 10px/1 var(--font-mono);
+  --text-strip-button: 600 9px/1 var(--font-mono);
+  --text-scale: 500 7px/1 var(--font-mono);
+  --text-figure: 500 28px/1.1 var(--font-mono);
+  --text-figure-sm: 500 20px/1.1 var(--font-mono);
+  --text-numeral: 400 13px/1.4 var(--font-mono);
+  --text-status: 400 10px/1 var(--font-mono);
+  --text-slot: 400 9px/1 var(--font-mono);
+  --text-readout: 400 8px/1 var(--font-mono);
+  --text-slide-title: 400 64px/1.05 var(--font-display);
+  --text-slide-heading: 600 40px/1.15 var(--font-sans);
+  --text-slide-body: 400 28px/1.4 var(--font-sans);
+  --text-slide-caption: 400 20px/1.4 var(--font-sans);
+  --text-slide-eyebrow: 500 18px/1.2 var(--font-mono);
+  --text-slide-number: 400 18px/1 var(--font-mono);
+}
+.display {
+  font-family: var(--font-display);
+  font-size: 48px;
+  line-height: 1.1;
+  font-weight: 400;
+  letter-spacing: 1px;
+}
+.display-sm {
+  font-family: var(--font-display);
+  font-size: 32px;
+  line-height: 1.15;
+  font-weight: 400;
+  letter-spacing: 0.5px;
+}
+.wordmark {
+  font-family: var(--font-display);
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 400;
+  letter-spacing: 1.5px;
+}
+.h1 {
+  font-family: var(--font-sans);
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
+.h2 {
+  font-family: var(--font-sans);
+  font-size: 22px;
+  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.h3 {
+  font-family: var(--font-sans);
+  font-size: 17px;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.h4 {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+}
+.lead {
+  font-family: var(--font-sans);
+  font-size: 17px;
+  line-height: 1.5;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.read {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.read-sm {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.label {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.3;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.note {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.45;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.body {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.control {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.control-md {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.control-lg {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.btn-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 500;
+  letter-spacing: 1.2px;
+}
+.btn-label-md {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 500;
+  letter-spacing: 1px;
+}
+.btn-label-lg {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1;
+  font-weight: 500;
+  letter-spacing: 1px;
+}
+.tab {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 500;
+  letter-spacing: 1px;
+}
+.hint {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  line-height: 1.3;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.section {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 1.2;
+  font-weight: 500;
+  letter-spacing: 2px;
+}
+.caption {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  line-height: 1.2;
+  font-weight: 500;
+  letter-spacing: 2px;
+}
+.strip-name {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.strip-button {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.scale {
+  font-family: var(--font-mono);
+  font-size: 7px;
+  line-height: 1;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.figure {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  line-height: 1.1;
+  font-weight: 500;
+  letter-spacing: -0.5px;
+}
+.figure-sm {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  line-height: 1.1;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.numeral {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.status {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.slot {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.readout {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  line-height: 1;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.slide-title {
+  font-family: var(--font-display);
+  font-size: 64px;
+  line-height: 1.05;
+  font-weight: 400;
+  letter-spacing: 2px;
+}
+.slide-heading {
+  font-family: var(--font-sans);
+  font-size: 40px;
+  line-height: 1.15;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+.slide-body {
+  font-family: var(--font-sans);
+  font-size: 28px;
+  line-height: 1.4;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.slide-caption {
+  font-family: var(--font-sans);
+  font-size: 20px;
+  line-height: 1.4;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.slide-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  line-height: 1.2;
+  font-weight: 500;
+  letter-spacing: 3px;
+}
+.slide-number {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("fonts/IBMPlexSans.ttf") format("truetype");
+  font-weight: 100 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Mono";
+  src: url("fonts/GeistMono.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Michroma";
+  src: url("fonts/Michroma-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
