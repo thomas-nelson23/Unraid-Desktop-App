@@ -1,10 +1,8 @@
 import { PAGE_LABEL } from '../nav.js';
 
 const PLANS = {
-  overview: 'Array status, disks, parity, GPUs and temperatures at a glance.',
   docker: 'Start, stop and update containers, read logs, open consoles, and open each WebUI inside the app. Grouped into your own folders.',
   vms: 'Your VMs with start, stop and a console.',
-  array: 'Every disk with SMART health, temperatures, and the parity schedule.',
   files: 'Browse shares, move files between them, and preview what you find.',
   terminal: 'A terminal on Cubecrusher, in a tab.',
   logs: "Unraid's system log and each container's log, searchable.",
