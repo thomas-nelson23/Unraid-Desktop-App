@@ -36,6 +36,8 @@ function createWindow() {
     minHeight: 680,
     backgroundColor: '#021d2e',
     title: 'Cubecrusher',
+    // Window and taskbar icon on Windows and Linux; macOS takes the dock icon from the app bundle.
+    icon: path.join(__dirname, 'icon.png'),
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
