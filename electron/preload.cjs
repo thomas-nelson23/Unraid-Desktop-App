@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('cubecrusher', {
   openExternal: call('open:external'),
   hermes: {
     list: call('hermes:list'),
+    test: call('hermes:test'),
     save: (instances, current) => invoke('hermes:save', { instances, current }),
     setCurrent: call('hermes:setCurrent'),
     status: call('hermes:status'),
