@@ -1171,34 +1171,52 @@ button {
 .rc {
   flex: 1;
   min-height: 0;
-  display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
-  gap: 20px;
-  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 24px 24px;
 }
 .rc[hidden] {
   display: none;
 }
-@media (max-width: 1100px) {
-  .rc {
-    grid-template-columns: 1fr;
-  }
-}
+/* The VMs or computers: a strip of chips above the screen. */
 .rc-list {
-  align-self: start;
-  display: grid;
+  display: flex;
+  align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
-.rc-list .card-head {
-  margin-bottom: 4px;
+.rc-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 .rc-li {
-  justify-content: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 260px;
+  padding: 6px 12px 6px 10px;
+  border: 1px solid var(--hair);
+  border-radius: 2px;
+  background: var(--panel);
+  color: var(--text-soft);
+  text-align: left;
+  cursor: pointer;
+}
+.rc-li:hover {
+  border-color: var(--hair-strong);
+  color: var(--text-bright);
+}
+.rc-li.cur {
+  border-color: var(--cyan-45);
+  background: var(--cyan-8);
+  color: var(--text-bright);
 }
 .rc-li .led {
   flex: none;
   height: 22px;
-  margin-right: 2px;
+  margin: 0;
 }
 .rc-name {
   display: grid;
@@ -1217,13 +1235,12 @@ button {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.rc-add {
-  justify-self: start;
-}
-.rc-list .err {
+.rc-warn {
+  flex-basis: 100%;
   margin: 0;
 }
 .rc-stage {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 12px;

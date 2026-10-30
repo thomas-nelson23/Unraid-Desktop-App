@@ -36,20 +36,19 @@ const PHASES = {
 
 const stamp = () => new Date().toISOString().slice(0, 19).replace('T', ' ').replace(/:/g, '.');
 
+// The VMs or computers as a strip above the screen, so the screen gets the
+// page's full width.
 function TargetList({ title, targets, picked, onPick, sample, children }) {
   return (
-    <section className="card rc-list">
-      <div className="card-head">
-        <h3 className="h4">{title}</h3>
-        {sample && (
-          <span className="pill" style={{ '--k': 'var(--brass)' }}>
-            Sample
-          </span>
-        )}
-      </div>
-      <div className="list">
+    <section className="rc-list" aria-label={title}>
+      {sample && (
+        <span className="pill" style={{ '--k': 'var(--brass)' }}>
+          Sample
+        </span>
+      )}
+      <div className="rc-chips">
         {targets.map((t) => (
-          <button key={t.id} className={`li rc-li${picked === t.id ? ' cur' : ''}`} aria-current={picked === t.id || undefined} onClick={() => onPick(t.id)}>
+          <button key={t.id} className={`rc-li${picked === t.id ? ' cur' : ''}`} aria-current={picked === t.id || undefined} onClick={() => onPick(t.id)}>
             <span className={`led${t.warn ? '' : t.on ? ' on' : ''}`} style={t.warn ? { background: 'var(--brass)' } : undefined} />
             <span className="rc-name">
               <b>{t.name}</b>
@@ -290,7 +289,7 @@ function Console({ kind, conn, shown }) {
             Open Unraid VMs
           </button>
         )}
-        {guacdDown && <p className="err small">guacd isn't answering at {poll.data.guacd}, so RDP can't connect. Is its container running?</p>}
+        {guacdDown && <p className="err small rc-warn">guacd isn't answering at {poll.data.guacd}, so RDP can't connect. Is its container running?</p>}
       </TargetList>
 
       <section className="card rc-stage" ref={stage}>
