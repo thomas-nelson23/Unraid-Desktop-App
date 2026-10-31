@@ -1161,8 +1161,8 @@ button {
   accent-color: var(--cyan);
 }
 
-/* VMs page: remote control (VM console and RDP tabs). The screen fills
-   what's left of the window under the header and tabs. */
+/* VMs page: remote control (VM console and RDP tabs). No page header: a
+   slim bar leads, and the screen fills the rest of the window. */
 .rc-page {
   display: flex;
   flex-direction: column;
@@ -1173,30 +1173,39 @@ button {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 20px 24px 24px;
+  gap: 8px;
+  padding: 10px 16px 16px;
 }
 .rc[hidden] {
   display: none;
 }
-/* The VMs or computers: a strip of chips above the screen. */
-.rc-list {
+.rc .btn,
+.rc .seg button {
+  height: 28px;
+}
+.rc .seg {
+  flex: none;
+}
+.rc-strip {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  min-height: 40px;
 }
-.rc-chips {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
+.rc-sp {
+  flex: 1;
+}
+.rc-tabs button {
+  padding: 0 14px;
 }
 .rc-li {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  max-width: 260px;
-  padding: 6px 12px 6px 10px;
+  max-width: 240px;
+  height: 36px;
+  padding: 0 12px 0 8px;
   border: 1px solid var(--hair);
   border-radius: 2px;
   background: var(--panel);
@@ -1215,12 +1224,13 @@ button {
 }
 .rc-li .led {
   flex: none;
-  height: 22px;
+  height: 20px;
   margin: 0;
 }
 .rc-name {
   display: grid;
   min-width: 0;
+  line-height: 1.25;
 }
 .rc-name b {
   font-weight: 600;
@@ -1235,49 +1245,26 @@ button {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.rc-warn {
-  flex-basis: 100%;
-  margin: 0;
-}
-.rc-stage {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
-  min-height: 460px;
-}
-.rc-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.rc-title {
-  display: grid;
-  min-width: 0;
-}
-.rc-title b {
-  font: 600 15px/1.3 var(--font-sans);
-  color: var(--text-bright);
-}
-.rc-end {
-  display: flex;
-  gap: 6px;
-  margin-left: auto;
+.rc-pill {
+  flex: none;
 }
 .rc-tools {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
+}
+.rc-warn,
+.rc-note,
+.rc-err {
+  margin: 0;
 }
 .rc-keys {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  padding: 10px;
+  gap: 4px;
+  padding: 6px;
   background: var(--well);
   border: 1px solid var(--hair);
   border-radius: 2px;
@@ -1288,8 +1275,8 @@ button {
   flex: 1 1 280px;
 }
 .rc-input {
-  height: 32px;
-  padding: 0 12px;
+  height: 28px;
+  padding: 0 10px;
   background: var(--well);
   border: 1px solid var(--hair-strong);
   border-radius: 2px;
@@ -1305,9 +1292,15 @@ button {
   flex: 1;
   min-width: 0;
 }
-.rc-note,
-.rc-err {
-  margin: 0;
+
+/* The screen: flush, with only a hairline round it. */
+.rc-stage {
+  position: relative;
+  flex: 1;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 .rc-screen-wrap {
   position: relative;
@@ -1370,9 +1363,37 @@ button {
   color: var(--text-bright);
 }
 .rc-stage:fullscreen {
-  padding: 8px;
+  padding: 0;
   background: #000;
 }
+
+/* The VMs or computers, in a drop-down at the start of the bar. */
+.rc-pick {
+  position: relative;
+}
+.rc-caret {
+  margin-left: 4px;
+  color: var(--text-dim);
+}
+.rc-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 5;
+  display: grid;
+  gap: 4px;
+  min-width: 260px;
+  padding: 6px;
+  background: var(--menu, var(--panel));
+  border: 1px solid var(--hair-strong);
+  border-radius: 2px;
+  box-shadow: var(--overlay-shadow);
+}
+.rc-menu .rc-li {
+  max-width: none;
+  width: 100%;
+}
+
 .rc-pair {
   display: grid;
   grid-template-columns: 1fr 1fr;

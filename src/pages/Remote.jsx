@@ -36,32 +36,6 @@ const PHASES = {
 
 const stamp = () => new Date().toISOString().slice(0, 19).replace('T', ' ').replace(/:/g, '.');
 
-// The VMs or computers as a strip above the screen, so the screen gets the
-// page's full width.
-function TargetList({ title, targets, picked, onPick, sample, children }) {
-  return (
-    <section className="rc-list" aria-label={title}>
-      {sample && (
-        <span className="pill" style={{ '--k': 'var(--brass)' }}>
-          Sample
-        </span>
-      )}
-      <div className="rc-chips">
-        {targets.map((t) => (
-          <button key={t.id} className={`rc-li${picked === t.id ? ' cur' : ''}`} aria-current={picked === t.id || undefined} onClick={() => onPick(t.id)}>
-            <span className={`led${t.warn ? '' : t.on ? ' on' : ''}`} style={t.warn ? { background: 'var(--brass)' } : undefined} />
-            <span className="rc-name">
-              <b>{t.name}</b>
-              <small>{t.meta}</small>
-            </span>
-          </button>
-        ))}
-      </div>
-      {children}
-    </section>
-  );
-}
-
 function KeysMenu({ session, onClose }) {
   const [text, setText] = useState('');
   const press = session.press;
@@ -91,7 +65,7 @@ function KeysMenu({ session, onClose }) {
 }
 
 // One tab: the list on the left, the screen on the right.
-function Console({ kind, conn, shown }) {
+function Console({ kind, conn, shown, tabBar }) {
   const live = conn.state === 'live';
   const isVm = kind === 'vm';
   // Keeps polling while hidden (more slowly), so an open screen stays put.
@@ -106,12 +80,22 @@ function Console({ kind, conn, shown }) {
   const [fit, setFit] = useState(true);
   const [quality, setQuality] = useState(() => (load('remote:quality', 'balanced') in QUALITIES ? load('remote:quality', 'balanced') : 'balanced'));
   const [keysOpen, setKeysOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const picker = useRef(null);
   const [note, setNote] = useState(null);
   const [retry, setRetry] = useState(null);
   const [adding, setAdding] = useState(false);
   const tries = useRef(0);
   const stage = useRef(null);
   const onState = useCallback((s) => setStateRaw(s), []);
+
+  // The drop-down closes on a click anywhere else.
+  useEffect(() => {
+    if (!pickerOpen) return undefined;
+    const close = (e) => !picker.current?.contains(e.target) && setPickerOpen(false);
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [pickerOpen]);
 
   const target = targets && (targets.find((t) => t.id === picked) || (isVm && targets.find((t) => t.canConnect)) || targets[0]);
   const session = state.phase === 'connected' ? state.session : null;
@@ -276,112 +260,173 @@ function Console({ kind, conn, shown }) {
     );
   }
 
+  const failedNow = showScreen && (state.phase === 'refused' || (state.phase === 'failed' && retry === null));
+
+  const pill = (
+    <span className="pill rc-pill" style={{ '--k': phase.k }} title={state.message || ''}>
+      {phase.led && <span className="led on" />}
+      {phase.label}
+      {retry !== null && ` in ${retry}s`}
+    </span>
+  );
+
+  const chips = (targets || []).map((t) => (
+    <button key={t.id} className={`rc-li${target?.id === t.id ? ' cur' : ''}`} aria-current={target?.id === t.id || undefined} onClick={() => pick(t.id)}>
+      <span className={`led${t.warn ? '' : t.on ? ' on' : ''}`} style={t.warn ? { background: 'var(--brass)' } : undefined} />
+      <span className="rc-name">
+        <b>{t.name}</b>
+        <small>{t.meta}</small>
+      </span>
+    </button>
+  ));
+
+  const extras = (
+    <>
+      {!isVm && live && (
+        <button className="btn quiet" onClick={() => setAdding(true)}>
+          Add computer…
+        </button>
+      )}
+      {isVm && live && poll.data?.unraidUrl && (
+        <button className="btn quiet" onClick={() => openExternal(poll.data.unraidUrl)}>
+          Unraid VMs ↗
+        </button>
+      )}
+    </>
+  );
+
+  const tools = showScreen && (
+    <div className="rc-tools">
+      <button
+        className={`btn quiet${keysOpen ? ' checked' : ''}`}
+        onClick={() => setKeysOpen((k) => !k)}
+        disabled={!session}
+        aria-expanded={keysOpen}
+        title="Ctrl+Alt+Del, Win, Alt+Tab and text to type"
+      >
+        Keys
+      </button>
+      <button className="btn quiet" onClick={paste} disabled={!session} title="Type this computer's clipboard into the screen">
+        Paste
+      </button>
+      <button className="btn quiet" onClick={snapshot} disabled={!session} title="Save a picture of the screen">
+        Snapshot
+      </button>
+      <div className="seg" role="group" aria-label="Size">
+        <button className={fit ? 'checked' : undefined} onClick={() => setFit(true)}>
+          Fit
+        </button>
+        <button className={fit ? undefined : 'checked'} onClick={() => setFit(false)}>
+          1:1
+        </button>
+      </div>
+      {isVm && (
+        <div className="seg" role="group" aria-label="Picture quality" title="Picture quality: Fast uses less of the connection">
+          {Object.entries(QUALITIES).map(([id, q]) => (
+            <button
+              key={id}
+              className={quality === id ? 'checked' : undefined}
+              onClick={() => {
+                setQuality(id);
+                save('remote:quality', id);
+              }}
+            >
+              {q.label}
+            </button>
+          ))}
+        </div>
+      )}
+      <button className="btn quiet" onClick={fullscreen} title="Full screen (Esc to leave)">
+        Full screen
+      </button>
+    </div>
+  );
+
+  const end = (
+    <>
+      {failedNow && (
+        <button className="btn primary" onClick={() => connect()}>
+          Try again
+        </button>
+      )}
+      {showScreen && (
+        <button className="btn" onClick={disconnect}>
+          Disconnect
+        </button>
+      )}
+    </>
+  );
+
+  const guacdWarn = guacdDown && <p className="err small rc-warn">guacd isn't answering at {poll.data.guacd}, so RDP can't connect. Is its container running?</p>;
+
+  const screenArea = showScreen ? (
+    <>
+      {isVm ? (
+        <VncScreen key={target.id} target={target} url={url} attempt={attempt} fit={fit} quality={QUALITIES[quality]} onState={onState} />
+      ) : (
+        <RdpScreen key={target.id} target={target} url={url} attempt={attempt} wake={wake} fit={fit} onState={onState} />
+      )}
+      {(state.phase === 'failed' || state.phase === 'refused') && (
+        <p className="err rc-err">
+          {state.message || `Couldn't reach ${target.name}.`}
+          {state.phase === 'failed' && retry === null && tries.current >= RETRY_MS.length && ' Stopped trying; press Try again.'}
+        </p>
+      )}
+    </>
+  ) : (
+    <div className="rc-splash">{splash}</div>
+  );
+
+  const popups = (
+    <>
+      {keysOpen && session && <KeysMenu session={session} onClose={() => setKeysOpen(false)} />}
+      {note && <p className="dim small rc-note">{note}</p>}
+    </>
+  );
+
+  // One slim bar: the tabs, the VMs or computers in a drop-down, the
+  // connection's state and its tools. The screen gets the rest.
+  const body = (
+    <>
+      <div className="rc-strip">
+        {tabBar}
+        <div className="rc-pick" ref={picker}>
+          <button className="rc-li cur" onClick={() => setPickerOpen((o) => !o)} aria-expanded={pickerOpen}>
+            <span className={`led${target?.warn ? '' : target?.on ? ' on' : ''}`} style={target?.warn ? { background: 'var(--brass)' } : undefined} />
+            <span className="rc-name">
+              <b>{target?.name ?? (isVm ? 'No VMs' : 'No computers')}</b>
+              <small>{target?.meta}</small>
+            </span>
+            <span className="rc-caret">▾</span>
+          </button>
+          {pickerOpen && (
+            <div className="rc-menu" onClick={() => setPickerOpen(false)}>
+              {chips}
+              {extras}
+            </div>
+          )}
+        </div>
+        {pill}
+        {!live && (
+          <span className="pill" style={{ '--k': 'var(--brass)' }}>
+            Sample
+          </span>
+        )}
+        <span className="rc-sp" />
+        {tools}
+        {end}
+      </div>
+      {guacdWarn}
+      {popups}
+      <div className="rc-stage" ref={stage}>
+        {screenArea}
+      </div>
+    </>
+  );
+
   return (
     <div className="rc" hidden={!shown}>
-      <TargetList title={isVm ? 'Virtual machines' : 'Computers'} targets={targets || []} picked={target?.id} onPick={pick} sample={!live}>
-        {!isVm && live && (
-          <button className="btn md quiet rc-add" onClick={() => setAdding(true)}>
-            Add a computer…
-          </button>
-        )}
-        {isVm && live && poll.data?.unraidUrl && (
-          <button className="btn md quiet rc-add" onClick={() => openExternal(poll.data.unraidUrl)}>
-            Open Unraid VMs
-          </button>
-        )}
-        {guacdDown && <p className="err small rc-warn">guacd isn't answering at {poll.data.guacd}, so RDP can't connect. Is its container running?</p>}
-      </TargetList>
-
-      <section className="card rc-stage" ref={stage}>
-        <div className="rc-bar">
-          <div className="rc-title">
-            <b>{target?.name ?? (isVm ? 'VM console' : 'RDP')}</b>
-            {target && <span className="dim mono small">{target.meta}</span>}
-          </div>
-          <span className="pill" style={{ '--k': phase.k }} title={state.message || ''}>
-            {phase.led && <span className="led on" />}
-            {phase.label}
-            {retry !== null && ` in ${retry}s`}
-          </span>
-          <div className="rc-end">
-            {showScreen && (state.phase === 'refused' || (state.phase === 'failed' && retry === null)) && (
-              <button className="btn md primary" onClick={() => connect()}>
-                Try again
-              </button>
-            )}
-            {showScreen && (
-              <button className="btn md" onClick={disconnect}>
-                Disconnect
-              </button>
-            )}
-          </div>
-        </div>
-        {showScreen && (
-          <div className="rc-tools">
-            <button
-              className={`btn md quiet${keysOpen ? ' checked' : ''}`}
-              onClick={() => setKeysOpen((k) => !k)}
-              disabled={!session}
-              aria-expanded={keysOpen}
-              title="Ctrl+Alt+Del, Win, Alt+Tab and text to type"
-            >
-              Keys
-            </button>
-            <button className="btn md quiet" onClick={paste} disabled={!session} title="Type this computer's clipboard into the screen">
-              Paste
-            </button>
-            <button className="btn md quiet" onClick={snapshot} disabled={!session} title="Save a picture of the screen">
-              Snapshot
-            </button>
-            <div className="seg md" role="group" aria-label="Size">
-              <button className={fit ? 'checked' : undefined} onClick={() => setFit(true)}>
-                Fit
-              </button>
-              <button className={fit ? undefined : 'checked'} onClick={() => setFit(false)}>
-                1:1
-              </button>
-            </div>
-            {isVm && (
-              <div className="seg md" role="group" aria-label="Picture quality" title="Picture quality: Fast uses less of the connection">
-                {Object.entries(QUALITIES).map(([id, q]) => (
-                  <button
-                    key={id}
-                    className={quality === id ? 'checked' : undefined}
-                    onClick={() => {
-                      setQuality(id);
-                      save('remote:quality', id);
-                    }}
-                  >
-                    {q.label}
-                  </button>
-                ))}
-              </div>
-            )}
-            <button className="btn md quiet" onClick={fullscreen} title="Full screen (Esc to leave)">
-              Full screen
-            </button>
-          </div>
-        )}
-        {keysOpen && session && <KeysMenu session={session} onClose={() => setKeysOpen(false)} />}
-        {note && <p className="dim small rc-note">{note}</p>}
-        {showScreen ? (
-          <>
-            {isVm ? (
-              <VncScreen key={target.id} target={target} url={url} attempt={attempt} fit={fit} quality={QUALITIES[quality]} onState={onState} />
-            ) : (
-              <RdpScreen key={target.id} target={target} url={url} attempt={attempt} wake={wake} fit={fit} onState={onState} />
-            )}
-            {(state.phase === 'failed' || state.phase === 'refused') && (
-              <p className="err rc-err">
-                {state.message || `Couldn't reach ${target.name}.`}
-                {state.phase === 'failed' && retry === null && tries.current >= RETRY_MS.length && ' Stopped trying; press Try again.'}
-              </p>
-            )}
-          </>
-        ) : (
-          <div className="rc-splash">{splash}</div>
-        )}
-      </section>
+      {body}
       {adding && (
         <AddComputer
           onClose={() => setAdding(false)}
@@ -467,24 +512,21 @@ export default function Remote({ conn, shown = true }) {
     setTab(id);
     save('remote:tab', id);
   };
+  // The page has no header of its own: the tabs lead the bar.
+  const tabBar = (
+    <div className="seg rc-tabs" role="tablist" aria-label="Remote control">
+      {TABS.map((t) => (
+        <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'checked' : undefined} onClick={() => pickTab(t.id)}>
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
   return (
     <div className="rc-page">
-      <div className="ph">
-        <div>
-          <span className="eyebrow c">Remote control</span>
-          <h1>VMs</h1>
-        </div>
-      </div>
-      <nav className="tabs" aria-label="Remote control">
-        {TABS.map((t) => (
-          <button key={t.id} className={tab === t.id ? 'cur' : undefined} aria-current={tab === t.id ? 'page' : undefined} onClick={() => pickTab(t.id)}>
-            {t.label}
-          </button>
-        ))}
-      </nav>
       {/* Both tabs stay mounted so switching doesn't drop a connection. */}
-      <Console kind="vm" conn={conn} shown={shown && tab === 'vm'} />
-      <Console kind="rdp" conn={conn} shown={shown && tab === 'rdp'} />
+      <Console kind="vm" conn={conn} shown={shown && tab === 'vm'} tabBar={tabBar} />
+      <Console kind="rdp" conn={conn} shown={shown && tab === 'rdp'} tabBar={tabBar} />
     </div>
   );
 }
