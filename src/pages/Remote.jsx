@@ -93,8 +93,9 @@ function Console({ kind, conn, shown, tabBar }) {
   useEffect(() => {
     if (!pickerOpen) return undefined;
     const close = (e) => !picker.current?.contains(e.target) && setPickerOpen(false);
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
+    // Capture phase: the screen keeps its own mouse events to itself.
+    document.addEventListener('pointerdown', close, true);
+    return () => document.removeEventListener('pointerdown', close, true);
   }, [pickerOpen]);
 
   const target = targets && (targets.find((t) => t.id === picked) || (isVm && targets.find((t) => t.canConnect)) || targets[0]);

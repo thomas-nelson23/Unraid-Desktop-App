@@ -21,7 +21,17 @@ function HermesInstances({ hermesList, onChanged, live }) {
   const [current, setCurrent] = useState(hermesList.current);
   const [error, setError] = useState(null);
   const [saved, setSaved] = useState(false);
+  const [tested, setTested] = useState({});
   const dashboard = usePoll('/api/hermes', { enabled: live });
+  const test = async (h) => {
+    setTested((t) => ({ ...t, [h.id]: 'Testing…' }));
+    try {
+      const out = await desktop.hermes.test(h);
+      setTested((t) => ({ ...t, [h.id]: `Answered${out.model ? ` · ${out.model}` : ''}${out.sentKey ? '' : ' · no key needed'}.` }));
+    } catch (err) {
+      setTested((t) => ({ ...t, [h.id]: err.message }));
+    }
+  };
   useEffect(() => {
     setRows(hermesList.instances);
     setCurrent(hermesList.current);
@@ -68,6 +78,10 @@ function HermesInstances({ hermesList, onChanged, live }) {
               <label className="small soft">
                 <input type="radio" name="hermes-current" checked={current === h.id} onChange={() => setCurrent(h.id)} /> Use by default
               </label>
+              <span className={`small ${tested[h.id]?.startsWith('Answered') ? 'ok' : 'err'}`}>{tested[h.id] || ''}</span>
+              <button type="button" className="btn md quiet" onClick={() => test(h)}>
+                Test
+              </button>
               <button type="button" className="btn md quiet" onClick={() => remove(i)}>
                 Remove
               </button>

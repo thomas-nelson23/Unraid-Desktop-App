@@ -5,12 +5,14 @@ import ConnectDialog from './ConnectDialog.jsx';
 import Home from './pages/Home.jsx';
 import Hermes from './pages/Hermes.jsx';
 import Docker from './pages/Docker.jsx';
+import Overview from './pages/Overview.jsx';
 import Settings from './pages/Settings.jsx';
 import NotBuilt from './pages/NotBuilt.jsx';
 import Remote from './pages/Remote.jsx';
 import { checkConnection, desktop, usePoll } from './lib/api.js';
 import { demoContainerCount, demoNeeds, demoServer } from './lib/demo.js';
 import { needsFromServer } from './lib/needs.js';
+import { useServerHistory } from './lib/history.js';
 
 const EMPTY_HERMES = { instances: [], current: null, status: [] };
 
@@ -61,6 +63,7 @@ export default function App() {
   const containerPoll = usePoll('/api/containers', { enabled: live, every: 30000 });
 
   const server = live ? serverPoll.data : demoServer();
+  const history = useServerHistory(live ? serverPoll.data?.host : null);
   const containers = containerPoll.data?.containers;
   const needs = live ? needsFromServer({ containers, host: server?.host }) : demoNeeds;
   const counts = {
@@ -79,6 +82,8 @@ export default function App() {
   let content;
   if (page === 'home') content = <Home conn={conn} needs={needs} onAsk={askHermes} onPage={setPage} />;
   else if (page === 'hermes') content = <Hermes tab={hermesTab} onTab={setHermesTab} draft={draft} onDraftUsed={onDraftUsed} hermesList={hermes.list} onSwitch={hermes.switchTo} onPage={setPage} />;
+  // Array & disks is a tab of Overview; its page id opens that tab.
+  else if (page === 'overview' || page === 'array') content = <Overview conn={conn} server={server} history={history} tab={page} onTab={setPage} onAsk={askHermes} />;
   else if (page === 'docker') content = <Docker conn={conn} onPage={setPage} />;
   else if (page === 'settings') content = <Settings conn={conn} onConnect={() => setConnecting(true)} hermesList={hermes.list} onHermesChanged={hermes.refresh} />;
   else if (page !== 'vms') content = <NotBuilt page={page} />;

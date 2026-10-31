@@ -126,8 +126,32 @@ async function chat(win, h, id, message, runId) {
   }
 }
 
+// Tries an address and key as typed, before they're saved, and says what
+// came back.
+async function test({ url: rawUrl, key, id }) {
+  const url = cleanUrl(rawUrl);
+  if (!url) throw new Error("That doesn't look like a Hermes address.");
+  const saved = settings.get().hermes.find((h) => h.id === id);
+  const useKey = typeof key === 'string' && key.trim() ? key.trim() : saved?.key || '';
+  let res;
+  try {
+    res = await net.fetch(`${url}/models`, { headers: headers(useKey), signal: AbortSignal.timeout(6000) });
+  } catch (err) {
+    throw new Error(`Can't reach ${url} (${err.cause?.code || err.message}).`);
+  }
+  const text = (await res.text().catch(() => '')).slice(0, 200);
+  if (res.status === 401 || res.status === 403) throw new Error(`Hermes refused the key (${res.status})${useKey ? '' : ', and no key was sent'}. It answered: ${text || '(nothing)'}`);
+  if (!res.ok) throw new Error(`Hermes answered ${res.status}: ${text || '(nothing)'}`);
+  let model = null;
+  try {
+    model = JSON.parse(text).data?.[0]?.id || null;
+  } catch {}
+  return { ok: true, model, sentKey: Boolean(useKey) };
+}
+
 function register(ipcMain, getWindow) {
   ipcMain.handle('hermes:list', () => list());
+  ipcMain.handle('hermes:test', (_e, raw) => test(raw || {}));
   ipcMain.handle('hermes:save', (_e, { instances, current: cur }) => save(instances, cur));
   ipcMain.handle('hermes:setCurrent', (_e, id) => setCurrent(id));
   ipcMain.handle('hermes:status', () => statusAll());

@@ -3,6 +3,7 @@ import { usePoll } from '../lib/api.js';
 import { demoEvents, demoWeather } from '../lib/demo.js';
 import { clock, dayLabel, deg, greeting, hourLabel, shortTime, weatherLabel } from '../lib/format.js';
 import { summaryLine } from '../lib/needs.js';
+import { load, save } from '../lib/store.js';
 
 const TONE = { red: 'var(--red)', brass: 'var(--brass)', cyan: 'var(--cyan)', mag: 'var(--ch-mag)' };
 
@@ -146,6 +147,7 @@ function toTimeline(data) {
   const colors = Object.fromEntries((data?.sources ?? []).map((s) => [s.id, s.color]));
   const names = Object.fromEntries((data?.sources ?? []).map((s) => [s.id, s.name]));
   return (data?.events ?? []).map((e) => ({
+    calendar: e.calendar,
     title: e.title || 'Untitled',
     note: e.allDay ? `All day · ${names[e.calendar] ?? ''}`.replace(/ · $/, '') : (names[e.calendar] ?? e.location ?? ''),
     start: e.allDay ? new Date(`${e.start}T00:00`) : new Date(e.start),
@@ -177,7 +179,7 @@ function Timeline({ events, now }) {
       </div>
     );
   };
-  if (!sorted.length) return <p className="dim">Nothing on the calendar for the rest of today.</p>;
+  if (!sorted.length) return <p className="dim">Nothing on this calendar for today and tonight.</p>;
   return (
     <div className="tl">
       {sorted.slice(0, split).map((e) => row(e, !e.allDay))}
@@ -186,6 +188,23 @@ function Timeline({ events, now }) {
       </div>
       {sorted.slice(split).map((e) => row(e, false))}
     </div>
+  );
+}
+
+// Which calendar the card shows: all of them, or one. Remembered on this computer.
+function CalendarPick({ sources, picked, onPick }) {
+  if (!sources.length) return <span className="eyebrow">Calendar</span>;
+  return (
+    <label className="lcd pick small" title="Which calendar to show">
+      <select value={picked} onChange={(e) => onPick(e.target.value)} aria-label="Calendar">
+        <option value="">All calendars</option>
+        {sources.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.name || s.id}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -199,14 +218,22 @@ function Today({ live, now }) {
   }, [dayStart]);
   const cal = usePoll(range, { enabled: live, every: 5 * 60_000 });
   const wx = usePoll('/api/weather', { enabled: live, every: 15 * 60_000 });
-  const events = live ? toTimeline(cal.data) : demoEvents();
+  const [picked, setPicked] = useState(() => load('homeCalendar', ''));
+  const pick = (id) => {
+    setPicked(id);
+    save('homeCalendar', id);
+  };
+  const sources = cal.data?.sources ?? [];
+  // A calendar that's gone from the server means "all" again.
+  const showing = sources.some((s) => s.id === picked) ? picked : '';
+  const events = (live ? toTimeline(cal.data) : demoEvents()).filter((e) => !showing || e.calendar === showing);
   const weather = live ? wx.data : demoWeather();
   return (
     <aside className="right">
       <section className="card">
         <div className="card-head">
           <h3 className="h4">Today and tonight</h3>
-          <span className="eyebrow">{live ? 'Calendar' : 'Sample'}</span>
+          {live ? <CalendarPick sources={sources} picked={showing} onPick={pick} /> : <span className="eyebrow">Sample</span>}
         </div>
         <Weather weather={weather} now={now} />
         {live && cal.error && !cal.data ? <p className="err">Couldn't load the calendar: {cal.error.message}</p> : <Timeline events={events} now={now} />}

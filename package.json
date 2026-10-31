@@ -38,7 +38,8 @@
     "appId": "com.thomasnelson.cubecrusher",
     "productName": "Cubecrusher",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
     },
     "files": [
       "dist/**",
@@ -65,19 +66,22 @@
       ],
       "identity": "-",
       "hardenedRuntime": false,
-      "gatekeeperAssess": false
+      "gatekeeperAssess": false,
+      "icon": "build/icon.icns"
     },
     "win": {
       "target": [
         "nsis"
-      ]
+      ],
+      "icon": "build/icon.ico"
     },
     "linux": {
       "target": [
         "AppImage",
         "pacman"
       ],
-      "category": "System"
+      "category": "System",
+      "icon": "build/icons"
     },
     "publish": null
   }

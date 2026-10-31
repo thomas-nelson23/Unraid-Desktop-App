@@ -931,7 +931,14 @@ button {
 .lcd.pick {
   padding-right: 6px;
 }
+.lcd.pick.small {
+  height: 22px;
+  font-size: 10px;
+}
 .lcd.pick select {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   background: none;
   border: 0;
   color: inherit;

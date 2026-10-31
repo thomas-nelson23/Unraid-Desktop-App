@@ -25,14 +25,23 @@ connected, every page shows sample data and says so.
   stop, restart and read logs. The app uses the SSH keys on this computer.
 - **Settings:** the dashboard server, Hermes instances, Docker servers, and
   in-app updates: pick a branch and install its latest GitHub Actions build.
-- **VMs** (remote control): one page with two tabs. **VM console** shows a
-  VM's own screen (VNC, the console Unraid opens) with Ctrl+Alt+Del and other
-  keys, paste-by-typing, snapshots, fit or 1:1, picture quality and full
-  screen. **RDP** opens a computer's desktop through guacd, the Guacamole
+- **VMs** (remote control): one page with two tabs, VM console and RDP, and
+  one slim bar (the tab switch, a drop-down of VMs or computers, the
+  connection's state and tools); the screen fills the rest. **VM console**
+  shows a VM's own screen (VNC, the console Unraid opens) with Ctrl+Alt+Del
+  and other keys, paste-by-typing, snapshots, fit or 1:1, picture quality and
+  full screen. **RDP** opens a computer's desktop through guacd, the Guacamole
   container Home-Dashboard's Remote page already uses, and can add computers
   and wake sleeping ones. Both tabs stay connected while you switch tabs or
   pages, and while a screen has the keyboard the app's own shortcuts (reload,
   close) go to the remote computer.
+- **Overview** (design option 4, "Story"): a plain-language summary and a
+  verdict for compute, memory, each GPU and storage; CPU, GPU and RAM lanes
+  for the time the app has been open; an ask bar for Hermes. **Array &
+  disks** is its second tab (no longer a separate page): the array's size,
+  disks ranked by how full they are, and suggestions. The sample data also
+  shows the growth forecast, per-disk temperatures and tonight's schedule,
+  which need the dashboard to report more.
 - Every other page says what it will do. They haven't been designed yet.
 
 ## Running it

@@ -25,9 +25,17 @@ async function gh(apiPath) {
     headers: { Authorization: `Bearer ${github.token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
     signal: AbortSignal.timeout(20_000),
   });
-  if (res.status === 401) throw new Error('GitHub refused the token. Make a new one with access to the repository.');
-  if (res.status === 404) throw new Error(`GitHub can't see ${github.owner}/${github.repo} with this token.`);
-  if (!res.ok) throw new Error(`GitHub answered ${res.status}.`);
+  if (!res.ok) {
+    let why = '';
+    try {
+      why = (await res.json()).message || '';
+    } catch {}
+    const said = why ? ` GitHub said: "${why}".` : '';
+    if (res.status === 401) throw new Error(`GitHub refused the token (401) on ${apiPath}.${said} Check it was pasted whole, hasn't expired, and is a classic token with the "repo" scope or a fine-grained one with Contents and Actions read access to ${github.owner}/${github.repo}.`);
+    if (res.status === 403) throw new Error(`GitHub wouldn't allow ${apiPath} with this token (403).${said} A fine-grained token needs Actions read access for builds.`);
+    if (res.status === 404) throw new Error(`GitHub can't see ${github.owner}/${github.repo} with this token (404).${said}`);
+    throw new Error(`GitHub answered ${res.status} on ${apiPath}.${said}`);
+  }
   return res.json();
 }
 
@@ -58,10 +66,18 @@ async function latest(branch) {
   };
 }
 
+// GitHub answers an artifact download with a redirect to a signed storage
+// URL, which refuses the token if it's still attached. So the redirect is
+// followed by hand, without the Authorization header.
 async function download(url, to) {
   const { github } = settings.get();
-  const res = await net.fetch(url, { headers: { Authorization: `Bearer ${github.token}`, Accept: 'application/vnd.github+json' } });
-  if (!res.ok) throw new Error(`The download failed (HTTP ${res.status}).`);
+  let res = await fetch(url, { headers: { Authorization: `Bearer ${github.token}`, Accept: 'application/vnd.github+json' }, redirect: 'manual' });
+  for (let hop = 0; hop < 5 && res.status >= 300 && res.status < 400; hop++) {
+    const next = res.headers.get('location');
+    if (!next) break;
+    res = await fetch(next, { redirect: 'manual' });
+  }
+  if (!res.ok) throw new Error(`The download failed (HTTP ${res.status}${res.status === 401 || res.status === 403 ? ', the token was refused for the download' : ''}).`);
   await pipeline(Readable.fromWeb(res.body), createWriteStream(to));
 }
 
