@@ -27,7 +27,7 @@ function HermesInstances({ hermesList, onChanged, live }) {
     setTested((t) => ({ ...t, [h.id]: 'Testing…' }));
     try {
       const out = await desktop.hermes.test(h);
-      setTested((t) => ({ ...t, [h.id]: `Answered${out.model ? ` · ${out.model}` : ''}${out.sentKey ? '' : ' · no key needed'}.` }));
+      setTested((t) => ({ ...t, [h.id]: `Answered, chats readable${out.model ? ` · ${out.model}` : ''}${out.sentKey ? '' : ' · no key needed'}.` }));
     } catch (err) {
       setTested((t) => ({ ...t, [h.id]: err.message }));
     }

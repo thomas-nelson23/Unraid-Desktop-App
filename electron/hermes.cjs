@@ -146,7 +146,22 @@ async function test({ url: rawUrl, key, id }) {
   try {
     model = JSON.parse(text).data?.[0]?.id || null;
   } catch {}
-  return { ok: true, model, sentKey: Boolean(useKey) };
+  // /v1/models may answer without checking the key; the sessions API, which
+  // the chat uses, does check it.
+  let sessions;
+  try {
+    sessions = await net.fetch(`${root(url)}/api/sessions?limit=1&offset=0`, { headers: headers(useKey), signal: AbortSignal.timeout(6000) });
+  } catch (err) {
+    throw new Error(`Models answered, but the sessions API didn't (${err.cause?.code || err.message}).`);
+  }
+  if (sessions.status === 401 || sessions.status === 403) {
+    const said = (await sessions.text().catch(() => '')).slice(0, 200);
+    throw new Error(`Models answered, but the sessions API refused the key (${sessions.status})${useKey ? '' : ' and no key was sent'}. It said: ${said || '(nothing)'}. The key has to be this container's API_SERVER_KEY.`);
+  }
+  if (sessions.status === 404) throw new Error("Models answered, but this Hermes has no sessions API. Update the Hermes Agent container.");
+  if (!sessions.ok) throw new Error(`Models answered, but the sessions API said ${sessions.status}.`);
+  const count = (await sessions.json().catch(() => ({}))).data?.length ?? 0;
+  return { ok: true, model, sentKey: Boolean(useKey), sessions: count };
 }
 
 function register(ipcMain, getWindow) {
