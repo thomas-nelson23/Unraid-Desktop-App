@@ -65,7 +65,8 @@
       "identity": "-",
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
-      "icon": "build/icon.icns"
+      "icon": "build/icon.icns",
+      "artifactName": "${productName}-${version}-${arch}-mac.${ext}"
     },
     "win": {
       "target": [

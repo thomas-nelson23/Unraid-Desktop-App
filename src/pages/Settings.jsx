@@ -224,6 +224,10 @@ function Updates({ github, onToken }) {
     };
   }, [branch, branches]);
   useEffect(() => desktop.updates.onProgress(setProgress), []);
+  // Back on this page while an update started earlier is still running.
+  useEffect(() => {
+    desktop.updates.busy().then((busy) => busy && setProgress((p) => p || { text: 'An update is still running…', pct: null })).catch(() => {});
+  }, []);
 
   const saveToken = async (e) => {
     e.preventDefault();
@@ -232,16 +236,18 @@ function Updates({ github, onToken }) {
   };
   const install = async () => {
     setError(null);
-    setProgress('Starting…');
+    setProgress({ text: 'Starting…', pct: null });
     try {
       const out = await desktop.updates.install(branch);
-      setProgress(out.note || 'Installed. Restarting…');
+      setProgress({ text: out.note || 'Installed. Restarting…', pct: null });
     } catch (err) {
       setProgress(null);
       setError(err.message);
     }
   };
+  const cancel = () => desktop.updates.cancel().catch(() => {});
   const same = latest?.run?.sha && BUILD.sha && latest.run.sha === BUILD.sha;
+  const size = latest?.run?.size ? ` (${Math.round(latest.run.size / 1e6)} MB)` : '';
 
   return (
     <section className="card settings-card">
@@ -293,11 +299,24 @@ function Updates({ github, onToken }) {
             </button>
             <button type="button" className="btn md primary" onClick={install} disabled={!latest?.run?.ready || Boolean(progress)}>
               {same ? 'Reinstall this build' : 'Download and install'}
+              {size}
             </button>
           </div>
         </div>
       )}
-      {progress && <p className="ok">{progress}</p>}
+      {progress && (
+        <div className="progress">
+          <p className="ok">{progress.text}</p>
+          {progress.pct != null && (
+            <span className="progress-bar" aria-hidden="true">
+              <i style={{ width: `${progress.pct}%` }} />
+            </span>
+          )}
+          <button type="button" className="btn md quiet" onClick={cancel}>
+            Cancel
+          </button>
+        </div>
+      )}
       {error && <p className="err">{error}</p>}
     </section>
   );

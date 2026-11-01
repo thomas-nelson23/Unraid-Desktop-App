@@ -50,6 +50,8 @@ contextBridge.exposeInMainWorld('cubecrusher', {
     branches: call('updates:branches'),
     latest: call('updates:latest'),
     install: call('updates:install'),
+    cancel: call('updates:cancel'),
+    busy: call('updates:busy'),
     onProgress: listen('updates:progress'),
   },
 });

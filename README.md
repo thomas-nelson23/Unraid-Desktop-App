@@ -60,7 +60,11 @@ npm test
   to Home-Dashboard, so the sign-in cookie lives in Electron's cookie jar and
   there are no CORS problems; `hermes.cjs` talks to Hermes Agent's API;
   `docker.cjs` runs `docker` over SSH; `updates.cjs` fetches builds from
-  GitHub Actions.
+  GitHub Actions. The workflow uploads a small artifact per platform for the
+  updater (`cubecrusher-mac-arm64`, `cubecrusher-mac-x64`, `cubecrusher-win`,
+  `cubecrusher-linux`, about 100 MB each) next to the all-in-one ones for a
+  first install; the download shows its progress, can be cancelled, and gives
+  up if nothing arrives for a minute.
 - `electron/preload.cjs` gives the page a small `window.cubecrusher` bridge.
 - `src/` is the React app. `src/steeze/` is a copy of the Steeze tokens,
   components and fonts.

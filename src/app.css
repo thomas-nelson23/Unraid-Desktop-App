@@ -1167,3 +1167,10 @@ button {
 .form input[type='radio'] {
   accent-color: var(--cyan);
 }
+
+/* Update download progress under the Updates card. */
+.progress { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; align-items: center; margin-top: 10px; }
+.progress .ok { margin: 0; }
+.progress-bar { grid-column: 1; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--cyan) 15%, transparent); overflow: hidden; }
+.progress-bar i { display: block; height: 100%; background: var(--cyan); transition: width 0.3s; }
+.progress .btn { grid-column: 2; grid-row: 1; }

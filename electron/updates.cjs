@@ -4,7 +4,7 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { pipeline } = require('node:stream/promises');
-const { Readable } = require('node:stream');
+const { Readable, Transform } = require('node:stream');
 const { createWriteStream } = require('node:fs');
 const settings = require('./settings.cjs');
 
@@ -13,7 +13,22 @@ const settings = require('./settings.cjs');
 // to a signed-in user, so a token with repo access is needed even for a
 // public repository.
 const WORKFLOW = 'build.yml';
-const ARTIFACT = { darwin: 'cubecrusher-mac', win32: 'cubecrusher-win', linux: 'cubecrusher-linux' }[process.platform];
+const ARCH = process.arch === 'arm64' ? 'arm64' : 'x64';
+// The artifact names this computer can install, best first. Newer builds
+// upload a small zip per Mac chip; older ones only the big all-in-one.
+const ARTIFACTS = { darwin: [`cubecrusher-mac-${ARCH}`, 'cubecrusher-mac'], win32: ['cubecrusher-win'], linux: ['cubecrusher-linux'] }[process.platform] || [];
+// A download that moves no bytes for this long is given up on.
+const STALL = 60_000;
+
+function pickArtifact(artifacts) {
+  for (const name of ARTIFACTS) {
+    const a = (artifacts || []).find((x) => x.name === name && !x.expired);
+    if (a) return a;
+  }
+  return null;
+}
+
+const mb = (n) => `${Math.round(n / 1e6)} MB`;
 
 const run = (cmd, args) =>
   new Promise((resolve, reject) => execFile(cmd, args, { maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) => (err ? reject(new Error(String(stderr || err.message).trim())) : resolve(stdout))));
@@ -51,7 +66,7 @@ async function latest(branch) {
   const latestRun = done[0] || null;
   if (!latestRun) return { branch, run: null };
   const { artifacts } = await gh(`/actions/runs/${latestRun.id}/artifacts`);
-  const artifact = (artifacts || []).find((a) => a.name === ARTIFACT && !a.expired) || null;
+  const artifact = pickArtifact(artifacts);
   return {
     branch,
     run: {
@@ -62,23 +77,60 @@ async function latest(branch) {
       conclusion: latestRun.conclusion,
       url: latestRun.html_url,
       ready: Boolean(artifact),
+      size: artifact?.size_in_bytes || 0,
     },
   };
 }
 
 // GitHub answers an artifact download with a redirect to a signed storage
 // URL, which refuses the token if it's still attached. So the redirect is
-// followed by hand, without the Authorization header.
-async function download(url, to) {
+// followed by hand, without the Authorization header. Progress goes back to
+// the page as bytes land, and a download that stops moving is given up on
+// instead of sitting there for ever.
+async function download(url, to, { report, signal, size }) {
   const { github } = settings.get();
-  let res = await fetch(url, { headers: { Authorization: `Bearer ${github.token}`, Accept: 'application/vnd.github+json' }, redirect: 'manual' });
+  let res = await fetch(url, { headers: { Authorization: `Bearer ${github.token}`, Accept: 'application/vnd.github+json' }, redirect: 'manual', signal });
   for (let hop = 0; hop < 5 && res.status >= 300 && res.status < 400; hop++) {
     const next = res.headers.get('location');
     if (!next) break;
-    res = await fetch(next, { redirect: 'manual' });
+    res = await fetch(next, { redirect: 'manual', signal });
   }
   if (!res.ok) throw new Error(`The download failed (HTTP ${res.status}${res.status === 401 || res.status === 403 ? ', the token was refused for the download' : ''}).`);
-  await pipeline(Readable.fromWeb(res.body), createWriteStream(to));
+  const total = Number(res.headers.get('content-length')) || size || 0;
+  let got = 0;
+  let moved = Date.now();
+  let told = 0;
+  const tell = () => {
+    const pct = total ? Math.min(100, Math.round((got / total) * 100)) : null;
+    report(`Downloading… ${mb(got)}${total ? ` of ${mb(total)}` : ''}`, pct);
+  };
+  const counter = new Transform({
+    transform(chunk, _enc, cb) {
+      got += chunk.length;
+      moved = Date.now();
+      if (Date.now() - told > 400) {
+        told = Date.now();
+        tell();
+      }
+      cb(null, chunk);
+    },
+  });
+  const stalled = setInterval(() => {
+    if (Date.now() - moved > STALL) {
+      clearInterval(stalled);
+      res.body.cancel(new Error('stalled')).catch(() => {});
+      counter.destroy(new Error(`The download stopped: nothing arrived for ${STALL / 1000} seconds (${mb(got)} of ${mb(total)}). Check the connection and try again.`));
+    }
+  }, 5000);
+  try {
+    await pipeline(Readable.fromWeb(res.body), counter, createWriteStream(to));
+  } catch (err) {
+    if (signal?.aborted) throw new Error('Download cancelled.');
+    throw err;
+  } finally {
+    clearInterval(stalled);
+  }
+  tell();
 }
 
 async function unzip(file, dir) {
@@ -140,28 +192,35 @@ async function installWindows(dir) {
   return { relaunch: false, quit: true, note: 'The installer is open. It replaces the app; start Cubecrusher again when it finishes.' };
 }
 
-async function install(branch, report) {
+async function install(branch, report, signal) {
   const { run: build } = await latest(branch);
   if (!build?.ready) throw new Error(`No finished build for ${branch} yet.`);
   const { artifacts } = await gh(`/actions/runs/${build.id}/artifacts`);
-  const artifact = artifacts.find((a) => a.name === ARTIFACT && !a.expired);
+  const artifact = pickArtifact(artifacts);
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cubecrusher-update-'));
-  report(`Downloading ${branch} @ ${build.sha.slice(0, 7)}…`);
-  const zip = path.join(dir, 'artifact.zip');
-  await download(artifact.archive_download_url, zip);
-  await unzip(zip, dir);
-  await fs.rm(zip, { force: true });
-  if (process.platform === 'darwin') return installMac(dir, report);
-  if (process.platform === 'linux') return installLinux(dir, report);
-  return installWindows(dir);
+  try {
+    report(`Starting the download of ${branch} @ ${build.sha.slice(0, 7)} (${mb(artifact.size_in_bytes)})…`);
+    const zip = path.join(dir, 'artifact.zip');
+    await download(artifact.archive_download_url, zip, { report, signal, size: artifact.size_in_bytes });
+    report('Unpacking…');
+    await unzip(zip, dir);
+    await fs.rm(zip, { force: true });
+    if (process.platform === 'darwin') return await installMac(dir, report);
+    if (process.platform === 'linux') return await installLinux(dir, report);
+    return await installWindows(dir);
+  } catch (err) {
+    await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+    throw err;
+  }
 }
 
-let installing = false;
+// The one update allowed at a time, with the handle that cancels it.
+let installing = null;
 
 function register(ipcMain, getWindow) {
-  const report = (text) => {
+  const report = (text, pct = null) => {
     const win = getWindow();
-    if (win && !win.isDestroyed()) win.webContents.send('updates:progress', text);
+    if (win && !win.isDestroyed()) win.webContents.send('updates:progress', { text, pct });
   };
   ipcMain.handle('updates:setToken', async (_e, token) => {
     await settings.update({ github: { ...settings.get().github, token: String(token || '').trim() } });
@@ -170,19 +229,25 @@ function register(ipcMain, getWindow) {
   ipcMain.handle('updates:branches', () => branches());
   ipcMain.handle('updates:latest', (_e, branch) => latest(branch));
   ipcMain.handle('updates:install', async (_e, branch) => {
-    if (installing) throw new Error('An update is already running.');
-    installing = true;
+    if (installing) throw new Error('An update is already running. Cancel it first.');
+    installing = new AbortController();
     try {
-      const out = await install(branch, report);
+      const out = await install(branch, report, installing.signal);
       if (out.relaunch) {
         app.relaunch();
         setTimeout(() => app.exit(0), 300);
       } else if (out.quit) setTimeout(() => app.quit(), 1500);
       return out;
     } finally {
-      installing = false;
+      installing = null;
     }
   });
+  ipcMain.handle('updates:cancel', () => {
+    installing?.abort();
+    return Boolean(installing);
+  });
+  // Whether an update is still running, for a page that was reloaded in the middle of one.
+  ipcMain.handle('updates:busy', () => Boolean(installing));
 }
 
 module.exports = { register };
