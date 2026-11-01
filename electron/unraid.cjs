@@ -79,12 +79,16 @@ async function gql(query, variables = {}, c = conf()) {
 }
 
 // Tries the full query, and when this API version lacks one of its fields,
-// the plainer one, so an older Unraid still shows something.
+// the plainer one, so an older Unraid still shows something. The one that
+// worked is remembered, so a poll doesn't fail its way down the list each time.
+const known = new WeakMap();
 async function gqlAny(queries, variables) {
   let last;
-  for (const q of queries) {
+  for (let i = known.get(queries) || 0; i < queries.length; i++) {
     try {
-      return await gql(q, variables);
+      const out = await gql(queries[i], variables);
+      known.set(queries, i);
+      return out;
     } catch (err) {
       last = err;
       if (!err.validation) throw err;
