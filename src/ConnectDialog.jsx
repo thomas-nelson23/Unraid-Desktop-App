@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import { api, inElectron, setSettings } from './lib/api.js';
 
-// Point the app at Cubecrusher's dashboard server and sign in to it. The
-// account is the same one used on the Home-Dashboard website.
-export default function ConnectDialog({ conn, onClose, onChanged }) {
+// Point the app at the Home-Dashboard server on Cubecrusher and sign in to
+// it, for the calendar, to-do list and notes. The account is the same one
+// used on the dashboard website. The server itself is reached through
+// Unraid's API, set up under Settings.
+export default function ConnectDialog({ conn: whole, onClose, onChanged }) {
+  const conn = whole.dashboard || whole;
   const [url, setUrl] = useState(conn.serverUrl || 'http://cubecrusher:3000');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(conn.state === 'demo' && conn.reason === 'offline' ? `Couldn't reach ${conn.serverUrl}.` : null);
+  const [error, setError] = useState(conn.state === 'offline' ? `Couldn't reach ${conn.serverUrl}.` : null);
 
   const run = async (fn) => {
     setBusy(true);
@@ -57,7 +60,7 @@ export default function ConnectDialog({ conn, onClose, onChanged }) {
       <section className="card dialog" role="dialog" aria-modal="true" aria-labelledby="connect-title">
         <div className="card-head">
           <h3 className="h4" id="connect-title">
-            Connect to Cubecrusher
+            Connect Home-Dashboard
           </h3>
           <button className="btn md quiet" onClick={onClose}>
             Close
@@ -83,10 +86,10 @@ export default function ConnectDialog({ conn, onClose, onChanged }) {
                   <span className="eyebrow">Dashboard server</span>
                   <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://192.168.1.10:3000" spellCheck={false} />
                 </label>
-                <p className="dim small">The address of Home-Dashboard on Cubecrusher. Over WireGuard, use its LAN address.</p>
+                <p className="dim small">The address of Home-Dashboard on Cubecrusher, for the calendar, to-do list and notes. Over WireGuard, use its LAN address.</p>
                 <div className="row-end">
                   <button className="btn md quiet" type="button" onClick={useSample} disabled={busy}>
-                    Use sample data
+                    {conn.serverUrl ? 'Forget it' : 'Skip'}
                   </button>
                   <button className="btn md" disabled={busy || !url.trim()}>
                     Connect

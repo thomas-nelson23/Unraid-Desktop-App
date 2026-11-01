@@ -1,18 +1,25 @@
-const { execFile } = require('node:child_process');
 const settings = require('./settings.cjs');
 const dashboard = require('./dashboard.cjs');
+const unraid = require('./unraid.cjs');
+const ssh = require('./ssh.cjs');
 const { fromInspect, parseStatsLines } = require('./dockerShape.cjs');
 
-// The servers whose containers the Docker page manages. Two kinds:
-//   dashboard  Cubecrusher through the Home-Dashboard server: read-only,
-//              nothing to set up.
+// The servers whose containers the Docker page manages. Three kinds:
+//   unraid     Cubecrusher through Unraid's own API: lists, starts, stops
+//              and restarts; logs and live stats over SSH when it's set up.
+//   dashboard  Cubecrusher through the Home-Dashboard server, read-only,
+//              when no Unraid API key is set yet.
 //   ssh        any machine with Docker, over SSH with the keys on this
 //              computer: lists, starts, stops, restarts and reads logs.
-const CUBECRUSHER = { id: 'cubecrusher', name: 'Cubecrusher', kind: 'dashboard' };
-const ID = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,80}$/;
+const ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,100}$/;
+
+function cubecrusher() {
+  if (unraid.configured()) return { ...unraid.sshServer(), kind: 'unraid' };
+  return { id: 'cubecrusher', name: 'Cubecrusher', kind: 'dashboard' };
+}
 
 function servers() {
-  return [CUBECRUSHER, ...settings.get().servers];
+  return [cubecrusher(), ...settings.get().servers];
 }
 
 function find(id) {
@@ -29,58 +36,55 @@ async function saveServers(list) {
     const user = String(raw.user || 'root').trim();
     if (!/^[A-Za-z0-9_.-]+$/.test(user)) throw new Error('The SSH user can only have letters, numbers, dots, dashes and underscores.');
     const port = Number(raw.port) || 22;
-    next.push({ id: raw.id && raw.id !== CUBECRUSHER.id ? String(raw.id) : settings.newId(), name: String(raw.name || '').trim().slice(0, 60) || host, kind: 'ssh', host, user, port });
+    next.push({ id: raw.id && raw.id !== 'cubecrusher' ? String(raw.id) : settings.newId(), name: String(raw.name || '').trim().slice(0, 60) || host, kind: 'ssh', host, user, port });
   }
   await settings.update({ servers: next });
   return servers();
 }
 
-// Runs one docker command on a server over SSH. BatchMode means a missing key
-// fails straight away instead of waiting for a password nobody can type.
-function ssh(server, args, { timeout = 20_000 } = {}) {
-  const sshArgs = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', '-o', 'StrictHostKeyChecking=accept-new', '-p', String(server.port || 22), `${server.user || 'root'}@${server.host}`, 'docker', ...args];
-  return new Promise((resolve, reject) => {
-    execFile('ssh', sshArgs, { timeout, maxBuffer: 64 * 1024 * 1024, env: process.env }, (err, stdout, stderr) => {
-      if (!err) return resolve(stdout);
-      const text = String(stderr || err.message).trim();
-      if (err.code === 'ENOENT') return reject(new Error('The ssh command is not installed on this computer.'));
-      if (/Permission denied/i.test(text)) return reject(new Error(`${server.name} refused the SSH key. Add this computer's public key to ${server.user}@${server.host}.`));
-      if (/Host key verification failed/i.test(text)) return reject(new Error(`${server.name}'s SSH host key changed. Check ~/.ssh/known_hosts.`));
-      if (/Could not resolve|Connection (refused|timed out)|No route to host|Operation timed out/i.test(text)) return reject(new Error(`Can't reach ${server.name} (${server.host}): ${text.split('\n').pop()}`));
-      if (/docker: (command )?not found/i.test(text)) return reject(new Error(`Docker isn't installed on ${server.name}.`));
-      if (err.killed) return reject(new Error(`${server.name} took too long to answer.`));
-      reject(new Error(text.split('\n').pop() || `${server.name}: ssh failed`));
-    });
-  });
-}
+const dockerSsh = ssh.docker;
 
 // `docker inspect` on every container, in one trip. The server's address
 // as the SSH host is what the web UI links use.
 async function listSsh(server) {
-  const ids = (await ssh(server, ['ps', '-aq'])).split('\n').filter(Boolean);
+  const ids = (await dockerSsh(server, ['ps', '-aq'])).split('\n').filter(Boolean);
   if (!ids.length) return [];
-  const raw = JSON.parse(await ssh(server, ['inspect', ...ids]));
+  const raw = JSON.parse(await dockerSsh(server, ['inspect', ...ids]));
   return raw.map((c) => fromInspect(c, server.host)).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-const stats = async (server) => (server.kind === 'dashboard' ? (await dashboard.get('/api/containers/stats')).stats : parseStatsLines(await ssh(server, ['stats', '--no-stream', '--format', '{{json .}}'])));
+const sshStats = async (server) => parseStatsLines(await dockerSsh(server, ['stats', '--no-stream', '--format', '{{json .}}']));
+// Unraid's API only streams stats over a socket, so Cubecrusher's come over
+// SSH too; when that isn't set up they stay blank, and it's retried later.
+const cubecrusherStats = ssh.withBackoff(sshStats);
+
+async function stats(server) {
+  if (server.kind === 'dashboard') return (await dashboard.get('/api/containers/stats')).stats;
+  if (server.kind === 'unraid') return cubecrusherStats(server).catch(() => ({}));
+  return sshStats(server);
+}
 
 async function containers(server) {
   if (server.kind === 'dashboard') return (await dashboard.get('/api/containers')).containers;
+  if (server.kind === 'unraid') return unraid.containers();
   return listSsh(server);
 }
+
+// Over SSH, docker wants the container's own name or id, not Unraid's prefixed one.
+const sshName = (c) => c.name || c.dockerId || c.id;
 
 function register(ipcMain) {
   ipcMain.handle('docker:servers', () => servers());
   ipcMain.handle('docker:saveServers', (_e, list) => saveServers(list));
   ipcMain.handle('docker:containers', (_e, id) => containers(find(id)));
   ipcMain.handle('docker:stats', (_e, id) => stats(find(id)));
-  ipcMain.handle('docker:logs', async (_e, { server, id, tail = 300 }) => {
+  ipcMain.handle('docker:logs', async (_e, { server, id, name, tail = 300 }) => {
     const s = find(server);
-    if (!ID.test(id)) throw new Error('Bad container id');
-    if (s.kind === 'dashboard') throw new Error('Logs need SSH access. Add Cubecrusher as an SSH server to read them.');
-    return ssh(s, ['logs', '--tail', String(Math.min(2000, Number(tail) || 300)), '--timestamps', id]).catch((err) => {
-      // docker logs writes the log to stderr too, which execFile reports as a failure only with an exit code.
+    const target = s.kind === 'unraid' ? sshName({ name, id }) : id;
+    if (!ID.test(target)) throw new Error('Bad container id');
+    if (s.kind === 'dashboard') throw new Error('Logs need the Unraid API and SSH. Set Cubecrusher up under Settings.');
+    return dockerSsh(s, ['logs', '--tail', String(Math.min(2000, Number(tail) || 300)), '--timestamps', target], { timeout: 30_000 }).catch((err) => {
+      if (s.kind === 'unraid' && /refused the SSH key|not installed|over SSH/.test(err.message)) throw new Error(`${err.message} Logs come over SSH; the API has no way to read them.`);
       throw err;
     });
   });
@@ -88,13 +92,14 @@ function register(ipcMain) {
     const s = find(server);
     if (!ID.test(id)) throw new Error('Bad container id');
     if (!['start', 'stop', 'restart', 'pause', 'unpause'].includes(action)) throw new Error('Unknown action');
-    if (s.kind === 'dashboard') throw new Error(`Starting and stopping need SSH access. Add Cubecrusher as an SSH server to ${action} containers.`);
-    await ssh(s, [action, id], { timeout: 90_000 });
+    if (s.kind === 'dashboard') throw new Error(`Starting and stopping need the Unraid API. Set Cubecrusher up under Settings to ${action} containers.`);
+    if (s.kind === 'unraid') return unraid.action(id, action);
+    await dockerSsh(s, [action, id], { timeout: 90_000 });
     return true;
   });
   ipcMain.handle('docker:test', async (_e, raw) => {
     const server = { name: raw.name || raw.host, host: String(raw.host || '').trim(), user: String(raw.user || 'root').trim(), port: Number(raw.port) || 22, kind: 'ssh' };
-    const version = (await ssh(server, ['version', '--format', '{{.Server.Version}}'])).trim();
+    const version = (await dockerSsh(server, ['version', '--format', '{{.Server.Version}}'])).trim();
     return { ok: true, version };
   });
 }

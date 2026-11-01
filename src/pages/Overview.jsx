@@ -153,8 +153,19 @@ function SystemTab({ sample, host, history, onAsk }) {
                 </div>
               ))}
             </div>
+          ) : host?.array?.parity?.running || host?.array?.parity?.paused ? (
+            <div className="ov-list">
+              <div className="ov-li">
+                <span className="mono ov-time">{host.array.parity.progress != null ? `${Math.round(host.array.parity.progress)}%` : 'now'}</span>
+                <span>Parity check {host.array.parity.paused ? 'paused' : 'running'}</span>
+                <span className="dim">{[host.array.parity.speed, host.array.parity.errors ? `${host.array.parity.errors} errors` : null].filter(Boolean).join(' · ')}</span>
+              </div>
+            </div>
           ) : (
-            <p className="dim small">Parity checks, the mover and backups will show here once the dashboard reports Unraid's schedules.</p>
+            <p className="dim small">
+              {host?.array?.state && host.array.state !== 'STARTED' ? `The array is ${host.array.state.toLowerCase().replace(/_/g, ' ')}. ` : ''}
+              Parity checks, the mover and backups will show here once the app reads Unraid's schedules.
+            </p>
           )}
         </section>
       </div>
@@ -196,7 +207,8 @@ function ArrayTab({ sample, host, onAsk }) {
   const series = sample ? demoArrayHistory() : null;
   const fc = series && array ? forecast(series, array.total) : null;
   const suggestions = sample ? demoArraySuggestions : diskSuggestions(disks);
-  const ranked = byAttention(disks);
+  // The array row is the lead line above, not a disk.
+  const ranked = byAttention(disks.filter((d) => d.role !== 'array'));
 
   return (
     <div className="hbody">
@@ -212,7 +224,7 @@ function ArrayTab({ sample, host, onAsk }) {
             ) : (
               '.'
             )}{' '}
-            {sample ? 'Parity is valid and every disk passes SMART.' : 'A growth forecast needs a usage history, which the dashboard will keep.'}
+            {sample ? 'Parity is valid and every disk passes SMART.' : host?.array?.parity?.running ? `A parity check is ${Math.round(host.array.parity.progress ?? 0)}% through.` : 'A growth forecast needs a usage history, which the app will keep in a later build.'}
           </Lead>
         ) : (
           <Lead>The server hasn't reported its disks yet.</Lead>
@@ -252,9 +264,9 @@ function ArrayTab({ sample, host, onAsk }) {
                     <span className="ov-bar">
                       <i style={{ width: `${p}%`, background: tone ? TONE[tone] : 'var(--ch-slate)' }} />
                     </span>
-                    <span className="dim small">{d.note ?? `${tb(d.used)} of ${tb(d.total)}`}</span>
+                    <span className="dim small">{d.note ?? (d.role === 'parity' ? `${tb(d.total)} · ${d.status === 'DISK_OK' ? 'valid' : d.status || ''}` : `${tb(d.used)} of ${tb(d.total)}`)}</span>
                   </span>
-                  <span className="mono soft">{d.temp != null ? `${Math.round(d.temp)} °C` : `${Math.round(p)}%`}</span>
+                  <span className="mono soft">{d.temp != null ? `${Math.round(d.temp)} °C` : d.used == null ? '' : `${Math.round(p)}%`}</span>
                 </div>
               );
             })}

@@ -41,9 +41,20 @@ contextBridge.exposeInMainWorld('cubecrusher', {
     saveServers: call('docker:saveServers'),
     containers: call('docker:containers'),
     stats: call('docker:stats'),
-    logs: (server, id, tail) => invoke('docker:logs', { server, id, tail }),
+    logs: (server, id, tail, name) => invoke('docker:logs', { server, id, tail, name }),
     action: (server, id, action) => invoke('docker:action', { server, id, action }),
     test: call('docker:test'),
+  },
+  unraid: {
+    check: call('unraid:check'),
+    test: call('unraid:test'),
+    save: call('unraid:save'),
+    server: call('unraid:server'),
+  },
+  weather: {
+    get: call('weather:get'),
+    search: call('weather:search'),
+    setPlace: call('weather:setPlace'),
   },
   updates: {
     setToken: call('updates:setToken'),

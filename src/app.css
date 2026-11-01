@@ -1174,3 +1174,11 @@ button {
 .progress-bar { grid-column: 1; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--cyan) 15%, transparent); overflow: hidden; }
 .progress-bar i { display: block; height: 100%; background: var(--cyan); transition: width 0.3s; }
 .progress .btn { grid-column: 2; grid-row: 1; }
+
+/* A button that reads as a link inside a sentence. */
+.linkish { background: none; border: 0; padding: 0; font: inherit; color: var(--cyan); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.linkish:hover { color: var(--text); }
+
+/* Two inputs in one field (SSH user and port). */
+.field .two { display: grid; grid-template-columns: 1fr 72px; gap: 8px; }
+.inst .inst-acts input[type='checkbox'] { accent-color: var(--cyan); }

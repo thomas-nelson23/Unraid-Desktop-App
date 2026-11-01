@@ -3,9 +3,14 @@
 A desktop app for the Cubecrusher Unraid server, for macOS, Windows and Linux.
 Built with Electron, React and the Steeze design system.
 
-It talks to the [Home-Dashboard](https://github.com/thomas-nelson23/Home-Dashboard)
-server running on Cubecrusher and signs in with the same account. Until it's
-connected, every page shows sample data and says so.
+It talks straight to Cubecrusher through Unraid's own API (the GraphQL one
+built into Unraid 7, with an API key) for the server, array, disks and
+containers, and over SSH for what that API lacks: GPU readings, container
+logs and live container stats. Each Hermes Agent container is reached
+directly, and the weather comes straight from Open-Meteo. The
+[Home-Dashboard](https://github.com/thomas-nelson23/Home-Dashboard) server is
+optional: only the calendar, to-do list and notes come from it. Until
+something is set up, every page shows sample data and says so.
 
 ## What's built
 
@@ -20,11 +25,14 @@ connected, every page shows sample data and says so.
   allow or deny a command it asks about; Models. The app talks to each
   Hermes Agent container directly, and a switcher on the page picks which
   one. Studio, Tools and Memory are next.
-- **Docker:** containers on Cubecrusher through the dashboard (read only),
-  and on any machine added under Settings over SSH, where the app can start,
-  stop, restart and read logs. The app uses the SSH keys on this computer.
-- **Settings:** the dashboard server, Hermes instances, Docker servers, and
-  in-app updates: pick a branch and install its latest GitHub Actions build.
+- **Docker:** Cubecrusher's containers through Unraid's API (start, stop,
+  restart; logs and per-container CPU and memory over SSH), and any other
+  machine added under Settings over SSH, where the app can start, stop,
+  restart and read logs. The app uses the SSH keys on this computer.
+- **Settings:** Cubecrusher's address and Unraid API key (plus the SSH
+  user), the optional dashboard server, the weather place, Hermes instances,
+  Docker servers, and in-app updates: pick a branch and install its latest
+  GitHub Actions build.
 - **Overview** (design option 4, "Story"): a plain-language summary and a
   verdict for compute, memory, each GPU and storage; CPU, GPU and RAM lanes
   for the time the app has been open; an ask bar for Hermes. **Array &
@@ -41,11 +49,18 @@ npm install
 npm run dev      # Vite + Electron with hot reload
 ```
 
-Click **Connect** in the top bar and enter the dashboard's address, such as
-`http://192.168.1.10:3000`, then sign in.
+Under **Settings → Cubecrusher**, enter the Unraid web UI's address, such
+as `http://192.168.1.10`, and an API key made on the server under
+**Settings → Management Access → API Keys** (admin role, so containers can
+be started and stopped). For an `https://` address by IP, tick "Trust its
+certificate". SSH uses this computer's keys, so `ssh root@192.168.1.10` has
+to work in a terminal for the GPU, logs and container stats.
 
-To try it without Cubecrusher, run Home-Dashboard with sample data
-(`npm run dev:server` in that repo) and connect to `http://localhost:3000`.
+For the calendar, click **Connect…** under Home-Dashboard (optional) and
+enter the dashboard's address, such as `http://192.168.1.10:3000`, then sign
+in. To try that part without Cubecrusher, run Home-Dashboard with sample
+data (`npm run dev:server` in that repo) and connect to
+`http://localhost:3000`.
 
 ```sh
 npm run build    # builds the page into dist/
@@ -56,11 +71,14 @@ npm test
 ## How it fits together
 
 - `electron/main.cjs` opens the window; `settings.cjs` keeps what's set up
-  in the app's config folder; `dashboard.cjs` makes every `/api/...` request
-  to Home-Dashboard, so the sign-in cookie lives in Electron's cookie jar and
+  in the app's config folder; `unraid.cjs` queries Unraid's GraphQL API
+  (`unraidShape.cjs` turns its answers into the shapes the pages draw, and
+  falls back to plainer queries on an older API); `ssh.cjs` runs commands
+  over SSH; `dashboard.cjs` makes every `/api/...` request to
+  Home-Dashboard, so the sign-in cookie lives in Electron's cookie jar and
   there are no CORS problems; `hermes.cjs` talks to Hermes Agent's API;
-  `docker.cjs` runs `docker` over SSH; `updates.cjs` fetches builds from
-  GitHub Actions. The workflow uploads a small artifact per platform for the
+  `docker.cjs` picks the Unraid API or SSH per server; `weather.cjs` asks
+  Open-Meteo; `updates.cjs` fetches builds from GitHub Actions. The workflow uploads a small artifact per platform for the
   updater (`cubecrusher-mac-arm64`, `cubecrusher-mac-x64`, `cubecrusher-win`,
   `cubecrusher-linux`, about 100 MB each) next to the all-in-one ones for a
   first install; the download shows its progress, can be cancelled, and gives

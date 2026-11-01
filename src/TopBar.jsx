@@ -21,21 +21,30 @@ function Readout({ label, fill, value, of, hot = 90, warm = 75 }) {
 
 const STATUS = {
   live: { text: 'ONLINE', led: 'on' },
+  dashboard: { text: 'VIA DASHBOARD', led: 'on' },
   signin: { text: 'SIGN IN', led: 'bad' },
   offline: { text: "CAN'T REACH", led: 'bad' },
   none: { text: 'SAMPLE DATA', led: '' },
 };
 
+// The light says how the app reaches Cubecrusher: straight through Unraid's
+// API, or through the dashboard, or not at all.
+function statusOf(conn) {
+  if (conn.server?.state === 'live') return STATUS.live;
+  if (conn.dashboard?.state === 'live') return STATUS.dashboard;
+  if (conn.state === 'signin') return STATUS.signin;
+  return conn.reason === 'offline' ? STATUS.offline : STATUS.none;
+}
+
 export default function TopBar({ conn, server, onConnect, children }) {
-  const key = conn.state === 'demo' ? conn.reason : conn.state;
-  const status = STATUS[key] ?? STATUS.none;
+  const status = statusOf(conn);
   const host = server?.host;
   const gpu = host?.gpus?.[0];
   const array = host?.disks?.find((d) => d.label === 'Array') ?? host?.disks?.[0];
   const cache = host?.disks?.find((d) => /cache/i.test(d.label));
   return (
     <header className="top">
-      <button className="lcd status" onClick={onConnect} title="Server connection">
+      <button className="lcd status" onClick={onConnect} title={conn.error || (conn.server?.state === 'live' ? `Unraid ${conn.server.unraid || ''} at ${conn.server.url}` : 'Server connection')}>
         <span className={`led ${status.led}`} />
         CUBECRUSHER · {status.text}
       </button>

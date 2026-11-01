@@ -8,7 +8,7 @@ import Docker from './pages/Docker.jsx';
 import Overview from './pages/Overview.jsx';
 import Settings from './pages/Settings.jsx';
 import NotBuilt from './pages/NotBuilt.jsx';
-import { checkConnection, desktop, usePoll } from './lib/api.js';
+import { checkConnection, desktop, usePoll, usePollFn } from './lib/api.js';
 import { demoContainerCount, demoNeeds, demoServer } from './lib/demo.js';
 import { needsFromServer } from './lib/needs.js';
 import { useServerHistory } from './lib/history.js';
@@ -50,15 +50,25 @@ export default function App() {
   const refresh = useCallback(async () => setConn(await checkConnection()), []);
   useEffect(() => {
     refresh();
+    // A server that was down comes back on its own.
+    const timer = setInterval(refresh, 60_000);
+    return () => clearInterval(timer);
   }, [refresh]);
 
+  // The server's readings and containers come straight from Cubecrusher
+  // through Unraid's API when that's set up, else through the dashboard.
   const live = conn.state === 'live';
-  const serverPoll = usePoll('/api/server', { enabled: live, every: 5000 });
-  const containerPoll = usePoll('/api/containers', { enabled: live, every: 30000 });
+  const direct = conn.server?.state === 'live';
+  const viaDashboard = !direct && conn.dashboard?.state === 'live';
+  const unraidPoll = usePollFn(() => desktop.unraid.server(), { key: 'unraid:server', enabled: direct, every: 5000 });
+  const unraidContainers = usePollFn(() => desktop.docker.containers('cubecrusher'), { key: 'unraid:containers', enabled: direct, every: 30000 });
+  const serverPoll = usePoll('/api/server', { enabled: viaDashboard, every: 5000 });
+  const containerPoll = usePoll('/api/containers', { enabled: viaDashboard, every: 30000 });
 
-  const server = live ? serverPoll.data : demoServer();
-  const history = useServerHistory(live ? serverPoll.data?.host : null);
-  const containers = containerPoll.data?.containers;
+  const host = direct ? unraidPoll.data : viaDashboard ? serverPoll.data?.host : null;
+  const server = live ? (host ? { host, error: null } : { host: null, error: (direct ? unraidPoll.error : serverPoll.error)?.message || null }) : demoServer();
+  const history = useServerHistory(host);
+  const containers = (direct ? unraidContainers.data : containerPoll.data?.containers) || undefined;
   const needs = live ? needsFromServer({ containers, host: server?.host }) : demoNeeds;
   const counts = {
     home: needs.length || null,
@@ -79,7 +89,7 @@ export default function App() {
   // Array & disks is a tab of Overview; its page id opens that tab.
   else if (page === 'overview' || page === 'array') content = <Overview conn={conn} server={server} history={history} tab={page} onTab={setPage} onAsk={askHermes} />;
   else if (page === 'docker') content = <Docker conn={conn} onPage={setPage} />;
-  else if (page === 'settings') content = <Settings conn={conn} onConnect={() => setConnecting(true)} hermesList={hermes.list} onHermesChanged={hermes.refresh} />;
+  else if (page === 'settings') content = <Settings conn={conn} onConnect={() => setConnecting(true)} onChanged={refresh} hermesList={hermes.list} onHermesChanged={hermes.refresh} />;
   else content = <NotBuilt page={page} />;
 
   return (
@@ -87,10 +97,10 @@ export default function App() {
       <div className="glow" aria-hidden="true" />
       <Sidebar page={page} onPage={setPage} counts={counts} />
       <main className="main">
-        <TopBar conn={conn} server={server} onConnect={() => setConnecting(true)}>
+        <TopBar conn={conn} server={server} onConnect={() => (desktop ? setPage('settings') : setConnecting(true))}>
           {conn.state !== 'live' && (
-            <button className="btn md" onClick={() => setConnecting(true)}>
-              {conn.state === 'signin' ? 'Sign in' : 'Connect'}
+            <button className="btn md" onClick={() => (conn.state === 'signin' ? setConnecting(true) : desktop ? setPage('settings') : setConnecting(true))}>
+              {conn.state === 'signin' ? 'Sign in' : 'Set up'}
             </button>
           )}
         </TopBar>

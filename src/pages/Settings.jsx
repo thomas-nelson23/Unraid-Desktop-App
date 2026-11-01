@@ -14,6 +14,186 @@ function Field({ label, children }) {
   );
 }
 
+// Cubecrusher itself, through Unraid's own API: the web UI's address and an
+// API key made on the server. SSH (with this computer's keys) covers what the
+// API can't: GPU readings, container logs and live container stats.
+function Cubecrusher({ conn, saved: savedSettings, onSaved }) {
+  const u = savedSettings.unraid || {};
+  const [form, setForm] = useState({ url: u.url || '', apiKey: '', insecure: Boolean(u.insecure), sshUser: u.sshUser || 'root', sshPort: u.sshPort || 22 });
+  const [note, setNote] = useState(null);
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const edit = (patch) => setForm((f) => ({ ...f, ...patch }));
+  const server = conn.server || {};
+
+  const test = async () => {
+    setBusy(true);
+    setError(null);
+    setNote('Asking Cubecrusher…');
+    try {
+      const out = await desktop.unraid.test(form);
+      setNote(`${out.hostname || 'It'} answered: Unraid ${out.unraid || '?'}, API ${out.api || '?'}. SSH ${out.ssh.ok ? `works · ${out.ssh.text}` : `not working: ${out.ssh.text}`}`);
+    } catch (err) {
+      setNote(null);
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const submit = async (e) => {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      const next = await desktop.unraid.save(form);
+      onSaved(next);
+      setForm((f) => ({ ...f, apiKey: '' }));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const state = server.state === 'live' ? 'Connected' : server.state === 'offline' ? "Can't reach" : 'Not set up';
+
+  return (
+    <section className="card settings-card">
+      <div className="card-head">
+        <h3 className="h4">Cubecrusher</h3>
+        <span className="pill" style={{ '--k': server.state === 'live' ? 'var(--cyan)' : server.state === 'offline' ? 'var(--red)' : 'var(--text-dim)' }}>
+          {state}
+        </span>
+      </div>
+      <p className="soft">
+        {server.state === 'live' ? (
+          <>
+            Talking to <b>{server.hostname}</b> at <span className="mono">{server.url}</span>, Unraid {server.unraid}. The top bar, Overview, Array and containers come straight from here.
+          </>
+        ) : server.state === 'offline' ? (
+          <span className="err">{server.error}</span>
+        ) : (
+          <>
+            The app talks to Unraid's own API. On Cubecrusher, open <b>Settings → Management Access → API Keys</b>, make a key with the <b>admin</b> role, and paste it here.
+          </>
+        )}
+      </p>
+      <form className="form" onSubmit={submit}>
+        <div className="inst">
+          <div className="fields three">
+            <Field label="Unraid address">
+              <input value={form.url} onChange={(e) => edit({ url: e.target.value })} placeholder="http://192.168.1.10" spellCheck={false} />
+            </Field>
+            <Field label={u.hasKey ? 'API key (saved)' : 'API key'}>
+              <input type="password" value={form.apiKey} onChange={(e) => edit({ apiKey: e.target.value })} placeholder={u.hasKey ? 'Leave empty to keep it' : 'Paste the key'} autoComplete="off" />
+            </Field>
+            <Field label="SSH user and port">
+              <span className="two">
+                <input value={form.sshUser} onChange={(e) => edit({ sshUser: e.target.value })} spellCheck={false} />
+                <input value={form.sshPort} onChange={(e) => edit({ sshPort: e.target.value })} inputMode="numeric" />
+              </span>
+            </Field>
+          </div>
+          <div className="inst-acts">
+            <label className="small soft">
+              <input type="checkbox" checked={form.insecure} onChange={(e) => edit({ insecure: e.target.checked })} /> Trust its certificate (for an https:// address by IP)
+            </label>
+            <button type="button" className="btn md quiet" onClick={test} disabled={busy || !form.url}>
+              Test
+            </button>
+            <button className="btn md primary" disabled={busy}>
+              {saved ? 'Saved' : 'Save'}
+            </button>
+          </div>
+        </div>
+        <p className="dim small">
+          SSH uses the keys on this computer, so <span className="mono">ssh {form.sshUser || 'root'}@{(() => { try { return new URL(form.url).hostname; } catch { return 'cubecrusher'; } })()}</span> has to work in a terminal first. Without it the GPU readouts, container logs and per-container CPU and memory stay blank; everything else still works.
+        </p>
+        {note && <p className="ok">{note}</p>}
+        {error && <p className="err">{error}</p>}
+      </form>
+    </section>
+  );
+}
+
+// The place the Home card's weather is for, straight from Open-Meteo.
+function WeatherPlace({ place, onSaved }) {
+  const [q, setQ] = useState('');
+  const [found, setFound] = useState(null);
+  const [error, setError] = useState(null);
+  const search = async (e) => {
+    e.preventDefault();
+    setError(null);
+    try {
+      setFound(await desktop.weather.search(q));
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+  const pick = async (p) => {
+    setError(null);
+    try {
+      onSaved(await desktop.weather.setPlace({ ...p, units: place?.units || 'fahrenheit' }));
+      setFound(null);
+      setQ('');
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+  const units = async (u) => onSaved(await desktop.weather.setPlace({ ...place, units: u }));
+  const label = (p) => [p.name, p.region, p.country].filter(Boolean).join(', ');
+  return (
+    <section className="card settings-card">
+      <div className="card-head">
+        <h3 className="h4">Weather</h3>
+        <span className="eyebrow">{place ? label(place) : 'No place yet'}</span>
+      </div>
+      <p className="soft">The weather on Home comes straight from Open-Meteo, no account needed. Pick the place to show.</p>
+      <form className="form" onSubmit={search}>
+        <div className="two">
+          <Field label="Find a place">
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Austin" />
+          </Field>
+          {place && (
+            <Field label="Units">
+              <select value={place.units || 'fahrenheit'} onChange={(e) => units(e.target.value)}>
+                <option value="fahrenheit">°F</option>
+                <option value="celsius">°C</option>
+              </select>
+            </Field>
+          )}
+        </div>
+        {found && (
+          <div className="chips">
+            {found.length ? (
+              found.map((p) => (
+                <button type="button" key={p.id} className="chip" onClick={() => pick(p)}>
+                  {label(p)}
+                </button>
+              ))
+            ) : (
+              <span className="dim small">Nothing found.</span>
+            )}
+          </div>
+        )}
+        <div className="row-end">
+          {place && (
+            <button type="button" className="btn md quiet" onClick={() => pick(null).catch(() => {})}>
+              Clear
+            </button>
+          )}
+          <button className="btn md" disabled={q.trim().length < 2}>
+            Search
+          </button>
+        </div>
+        {error && <p className="err">{error}</p>}
+      </form>
+    </section>
+  );
+}
+
 // Each Hermes Agent container the app can talk to. Its API server listens
 // on 8642 in the container; the address is wherever that's published.
 function HermesInstances({ hermesList, onChanged, live }) {
@@ -145,7 +325,7 @@ function DockerServers() {
         <span className="eyebrow">Over SSH</span>
       </div>
       <p className="soft">
-        Cubecrusher's containers already show through the dashboard, read only. To start, stop and read logs there, and to manage radioshack or any other machine, add it here. The app uses the SSH keys on this computer, so{' '}
+        Cubecrusher's containers come through Unraid's API, set up above. To manage radioshack or any other machine with Docker, add it here. The app uses the SSH keys on this computer, so{' '}
         <span className="mono">ssh root@host docker ps</span> has to work in a terminal first.
       </p>
       <form className="form" onSubmit={submit}>
@@ -322,11 +502,12 @@ function Updates({ github, onToken }) {
   );
 }
 
-export default function Settings({ conn, onConnect, hermesList, onHermesChanged }) {
+export default function Settings({ conn, onConnect, onChanged, hermesList, onHermesChanged }) {
   const [settings, setSettings] = useState(null);
   useEffect(() => {
     if (desktop) window.cubecrusher.getSettings().then(setSettings);
   }, []);
+  const dash = conn.dashboard || conn;
   return (
     <div className="content">
       <div className="ph nopad">
@@ -335,32 +516,51 @@ export default function Settings({ conn, onConnect, hermesList, onHermesChanged 
           <h1>Settings</h1>
         </div>
       </div>
+      {desktop && settings && (
+        <Cubecrusher
+          conn={conn}
+          saved={settings}
+          onSaved={(unraid) => {
+            setSettings((x) => ({ ...x, unraid }));
+            onChanged?.();
+          }}
+        />
+      )}
       <section className="card settings-card">
         <div className="card-head">
-          <h3 className="h4">Dashboard server</h3>
-          <span className={`pill`} style={{ '--k': conn.state === 'live' ? 'var(--cyan)' : 'var(--text-dim)' }}>
-            {conn.state === 'live' ? 'Connected' : conn.state === 'signin' ? 'Sign in' : 'Not connected'}
+          <h3 className="h4">Home-Dashboard (optional)</h3>
+          <span className={`pill`} style={{ '--k': dash.state === 'live' ? 'var(--cyan)' : 'var(--text-dim)' }}>
+            {dash.state === 'live' ? 'Connected' : dash.state === 'signin' ? 'Sign in' : 'Not connected'}
           </span>
         </div>
         <p className="soft">
-          {conn.serverUrl ? (
+          {dash.serverUrl ? (
             <>
-              Home-Dashboard at <span className="mono">{conn.serverUrl}</span>
-              {conn.user ? ` as ${conn.user.name || conn.user.username}` : ''}. Home, the top bar and Cubecrusher's containers come from here.
+              Home-Dashboard at <span className="mono">{dash.serverUrl}</span>
+              {conn.user ? ` as ${conn.user.name || conn.user.username}` : ''}. Only the calendar, to-do list and notes come from here{conn.server?.state === 'live' ? '' : ', and the server readings until Cubecrusher is set up above'}.
             </>
           ) : (
-            'Not set up. Home shows sample data until the app is connected.'
+            'Not connected. The calendar on Home needs it; nothing else does.'
           )}
         </p>
         <div className="row-end">
           <button className="btn md" onClick={onConnect}>
-            {conn.state === 'live' ? 'Change…' : 'Connect…'}
+            {dash.state === 'live' ? 'Change…' : 'Connect…'}
           </button>
         </div>
       </section>
       {desktop ? (
         <>
-          <HermesInstances hermesList={hermesList} onChanged={onHermesChanged} live={conn.state === 'live'} />
+          {settings && (
+            <WeatherPlace
+              place={settings.weather}
+              onSaved={(weather) => {
+                setSettings((x) => ({ ...x, weather }));
+                onChanged?.();
+              }}
+            />
+          )}
+          <HermesInstances hermesList={hermesList} onChanged={onHermesChanged} live={dash.state === 'live'} />
           <DockerServers />
           {settings && <Updates github={settings.github} onToken={(github) => setSettings((s) => ({ ...s, github }))} />}
         </>

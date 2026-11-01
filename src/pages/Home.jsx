@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { usePoll } from '../lib/api.js';
 import { demoEvents, demoWeather } from '../lib/demo.js';
+import { desktop, usePollFn } from '../lib/api.js';
 import { clock, dayLabel, deg, greeting, hourLabel, shortTime, weatherLabel } from '../lib/format.js';
 import { summaryLine } from '../lib/needs.js';
 import { load, save } from '../lib/store.js';
@@ -208,7 +209,7 @@ function CalendarPick({ sources, picked, onPick }) {
   );
 }
 
-function Today({ live, now }) {
+function Today({ live, dash, hasPlace, now, onPage }) {
   // Today from midnight through 6 AM tomorrow, so tonight's jobs show.
   const dayStart = startOfDay(now).getTime();
   const range = useMemo(() => {
@@ -216,8 +217,12 @@ function Today({ live, now }) {
     const to = new Date(dayStart + 30 * 3600e3).toISOString();
     return `/api/calendar/events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
   }, [dayStart]);
-  const cal = usePoll(range, { enabled: live, every: 5 * 60_000 });
-  const wx = usePoll('/api/weather', { enabled: live, every: 15 * 60_000 });
+  // The calendar lives in the dashboard; the weather comes straight from
+  // Open-Meteo for the place picked in Settings, or from the dashboard's
+  // place when none is picked here.
+  const cal = usePoll(range, { enabled: dash, every: 5 * 60_000 });
+  const own = usePollFn(() => desktop.weather.get(), { key: 'weather', enabled: Boolean(desktop) && hasPlace, every: 15 * 60_000 });
+  const wx = usePoll('/api/weather', { enabled: dash && !(desktop && hasPlace), every: 15 * 60_000 });
   const [picked, setPicked] = useState(() => load('homeCalendar', ''));
   const pick = (id) => {
     setPicked(id);
@@ -226,17 +231,41 @@ function Today({ live, now }) {
   const sources = cal.data?.sources ?? [];
   // A calendar that's gone from the server means "all" again.
   const showing = sources.some((s) => s.id === picked) ? picked : '';
-  const events = (live ? toTimeline(cal.data) : demoEvents()).filter((e) => !showing || e.calendar === showing);
-  const weather = live ? wx.data : demoWeather();
+  const events = (dash ? toTimeline(cal.data) : live ? [] : demoEvents()).filter((e) => !showing || e.calendar === showing);
+  const weather = live ? (desktop && hasPlace ? own.data : wx.data) : demoWeather();
   return (
     <aside className="right">
       <section className="card">
         <div className="card-head">
           <h3 className="h4">Today and tonight</h3>
-          {live ? <CalendarPick sources={sources} picked={showing} onPick={pick} /> : <span className="eyebrow">Sample</span>}
+          {dash ? <CalendarPick sources={sources} picked={showing} onPick={pick} /> : <span className="eyebrow">{live ? 'Weather' : 'Sample'}</span>}
         </div>
         <Weather weather={weather} now={now} />
-        {live && cal.error && !cal.data ? <p className="err">Couldn't load the calendar: {cal.error.message}</p> : <Timeline events={events} now={now} />}
+        {live && !weather && (
+          <p className="dim small">
+            {desktop ? (
+              <>
+                No weather place yet.{' '}
+                <button className="linkish" onClick={() => onPage('settings')}>
+                  Pick one in Settings
+                </button>
+                .
+              </>
+            ) : (
+              'No weather yet.'
+            )}
+          </p>
+        )}
+        {dash && cal.error && !cal.data ? <p className="err">Couldn't load the calendar: {cal.error.message}</p> : dash || !live ? <Timeline events={events} now={now} /> : null}
+        {live && !dash && (
+          <div className="card-foot">
+            Your calendar comes through Home-Dashboard.{' '}
+            <button className="linkish" onClick={() => onPage('settings')}>
+              Connect it in Settings
+            </button>{' '}
+            to see it here.
+          </div>
+        )}
         {!live && <div className="card-foot">Sample events. Server jobs will come from Unraid's schedules.</div>}
       </section>
     </aside>
@@ -246,13 +275,14 @@ function Today({ live, now }) {
 export default function Home({ conn, needs, onAsk, onPage }) {
   const now = useNow();
   const live = conn.state === 'live';
-  const name = live ? (conn.user?.name || conn.user?.username || '').split(' ')[0] : '';
+  const dash = conn.dashboard?.state === 'live';
+  const name = dash ? (conn.user?.name || conn.user?.username || '').split(' ')[0] : '';
   return (
     <div className="content">
       <Hero now={now} name={name} needs={needs} onAsk={onAsk} />
       <div className="below">
         <Feed needs={needs} sample={!live} onPage={onPage} />
-        <Today live={live} now={now} />
+        <Today live={live} dash={dash} hasPlace={conn.hasPlace} now={now} onPage={onPage} />
       </div>
     </div>
   );

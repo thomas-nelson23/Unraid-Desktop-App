@@ -3,9 +3,12 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 
 // Everything the app remembers about this computer's setup, in the user's
-// config folder so it survives updates: the dashboard server, the Hermes
-// instances, the Docker servers and the GitHub token for updates.
+// config folder so it survives updates: Cubecrusher's Unraid API, the
+// optional dashboard server, the Hermes instances, the Docker servers, the
+// weather place and the GitHub token for updates.
 const DEFAULTS = {
+  unraid: { url: process.env.UNRAID_URL || '', apiKey: process.env.UNRAID_API_KEY || '', insecure: false, sshUser: 'root', sshPort: 22 },
+  weather: null,
   serverUrl: process.env.CUBECRUSHER_URL || '',
   hermes: [],
   hermesCurrent: null,
@@ -21,7 +24,7 @@ const file = () => path.join(app.getPath('userData'), 'settings.json');
 async function load() {
   try {
     const saved = JSON.parse(await fs.readFile(file(), 'utf8'));
-    settings = { ...structuredClone(DEFAULTS), ...saved, github: { ...DEFAULTS.github, ...(saved.github || {}) } };
+    settings = { ...structuredClone(DEFAULTS), ...saved, github: { ...DEFAULTS.github, ...(saved.github || {}) }, unraid: { ...DEFAULTS.unraid, ...(saved.unraid || {}) } };
   } catch {
     // First run: nothing saved yet.
   }
@@ -46,7 +49,10 @@ async function update(next) {
 
 // What the page may see: never a key or token, only whether one is set.
 function forPage() {
+  const { apiKey, ...unraid } = settings.unraid;
   return {
+    unraid: { ...unraid, hasKey: Boolean(apiKey) },
+    weather: settings.weather,
     serverUrl: settings.serverUrl,
     hermes: settings.hermes.map(({ key, ...h }) => ({ ...h, hasKey: Boolean(key) })),
     hermesCurrent: settings.hermesCurrent,

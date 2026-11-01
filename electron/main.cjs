@@ -4,6 +4,8 @@ const settings = require('./settings.cjs');
 const dashboard = require('./dashboard.cjs');
 const hermes = require('./hermes.cjs');
 const docker = require('./docker.cjs');
+const unraid = require('./unraid.cjs');
+const weather = require('./weather.cjs');
 const updates = require('./updates.cjs');
 
 let win = null;
@@ -26,6 +28,8 @@ ipcMain.handle('open:external', (_event, url) => {
 });
 hermes.register(ipcMain, () => win);
 docker.register(ipcMain);
+unraid.register(ipcMain);
+weather.register(ipcMain);
 updates.register(ipcMain, () => win);
 
 function createWindow() {
@@ -65,6 +69,7 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   await settings.load();
+  unraid.ready();
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

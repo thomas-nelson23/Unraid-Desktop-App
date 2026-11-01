@@ -14,7 +14,7 @@ function Light({ c }) {
 
 function Row({ c, stat, server, busy, onAction, onLogs, selected, onSelect }) {
   const running = c.state === 'running';
-  const can = server.kind === 'ssh';
+  const can = server.kind !== 'dashboard';
   const ip = c.networks?.find((n) => n.ip)?.ip;
   return (
     <div className={`ct${selected ? ' cur' : ''}`} onClick={() => onSelect(c)}>
@@ -35,7 +35,7 @@ function Row({ c, stat, server, busy, onAction, onLogs, selected, onSelect }) {
             WebUI
           </button>
         )}
-        <button className="btn md quiet" onClick={() => onLogs(c)} disabled={!can} title={can ? 'Last 300 lines' : 'Logs need SSH access'}>
+        <button className="btn md quiet" onClick={() => onLogs(c)} disabled={!can} title={can ? 'Last 300 lines' : 'Logs need the Unraid API and SSH'}>
           Logs
         </button>
         {running ? (
@@ -62,7 +62,7 @@ function Logs({ server, c, onClose }) {
   const fetchLogs = useCallback(() => {
     setState({ text: null, error: null });
     desktop.docker
-      .logs(server.id, c.id, 300)
+      .logs(server.id, c.id, 300, c.name)
       .then((text) => setState({ text, error: null }))
       .catch((err) => setState({ text: null, error: err.message }));
   }, [server.id, c.id]);
@@ -105,10 +105,11 @@ function useServers(live) {
 
 export default function Docker({ conn, onPage }) {
   const live = conn.state === 'live';
-  const { servers } = useServers(live);
+  const direct = conn.server?.state === 'live';
+  const { servers } = useServers(`${live}:${direct}`);
   const [serverId, setServerId] = useState('cubecrusher');
   const server = servers.find((s) => s.id === serverId) || servers[0] || { id: 'cubecrusher', name: 'Cubecrusher', kind: 'dashboard' };
-  const demo = server.kind === 'dashboard' && !live;
+  const demo = server.kind === 'dashboard' && conn.dashboard?.state !== 'live';
   const [tick, setTick] = useState(0);
   const [data, setData] = useState({ containers: null, error: null });
   const [stats, setStats] = useState({});
@@ -121,7 +122,7 @@ export default function Docker({ conn, onPage }) {
 
   // Containers come through the bridge for any server; the dashboard poll is
   // the browser fallback.
-  const dashPoll = usePoll('/api/containers', { enabled: !desktop && live && server.kind === 'dashboard', every: 15000 });
+  const dashPoll = usePoll('/api/containers', { enabled: !desktop && conn.dashboard?.state === 'live' && server.kind === 'dashboard', every: 15000 });
   useEffect(() => {
     if (demo) {
       setData({ containers: demoContainers, error: null });
@@ -215,6 +216,7 @@ export default function Docker({ conn, onPage }) {
           <button key={s.id} className={s.id === server.id ? 'cur' : undefined} onClick={() => setServerId(s.id)}>
             {s.name}
             {s.kind === 'dashboard' && <span className="dim"> · read only</span>}
+            {s.kind === 'unraid' && <span className="dim"> · Unraid</span>}
           </button>
         ))}
         <button className="add" onClick={() => onPage('settings')}>
@@ -227,7 +229,7 @@ export default function Docker({ conn, onPage }) {
             {all.length ? `${running} of ${all.length} running${unhealthy ? ` · ${unhealthy} unhealthy` : ''}` : data.error ? 'Unavailable' : 'Loading…'}
           </span>
           <span className="eyebrow">
-            {demo ? 'Sample' : server.kind === 'dashboard' ? 'Through the dashboard · add Cubecrusher over SSH to start and stop' : `SSH · ${server.user}@${server.host}`}
+            {demo ? 'Sample' : server.kind === 'dashboard' ? 'Through the dashboard · set up the Unraid API in Settings to start and stop' : server.kind === 'unraid' ? `Unraid API · logs and stats over SSH as ${server.user}@${server.host}` : `SSH · ${server.user}@${server.host}`}
           </span>
         </div>
         {data.error && <p className="err">{data.error}</p>}
