@@ -80,8 +80,31 @@
         "pacman"
       ],
       "category": "System",
-      "icon": "build/icons"
+      "icon": "build/icons",
+      "executableName": "cubecrusher",
+      "synopsis": "Desktop app for the Cubecrusher Unraid server",
+      "desktop": {
+        "entry": {
+          "Keywords": "unraid;server;docker;hermes;"
+        }
+      }
     },
-    "publish": null
+    "publish": null,
+    "pacman": {
+      "depends": [
+        "gtk3",
+        "nss",
+        "nspr",
+        "alsa-lib",
+        "libxss",
+        "libxtst",
+        "libdrm",
+        "mesa",
+        "libnotify",
+        "at-spi2-core",
+        "libcups",
+        "xdg-utils"
+      ]
+    }
   }
 }

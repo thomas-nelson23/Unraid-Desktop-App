@@ -89,6 +89,14 @@ npm test
 
 ## Installers
 
+On CachyOS or any Arch-based distro, the `.pacman` package installs with
+`sudo pacman -U cubecrusher-desktop-0.1.0.pacman` and shows up in the app
+menu as Cubecrusher (binary `cubecrusher`). The AppImage runs anywhere:
+`chmod +x` it and double-click; it needs `fuse2` (`sudo pacman -S fuse2`),
+or run it with `--appimage-extract-and-run`. The in-app updater replaces an
+AppImage in place; for a pacman install it opens the folder with the new
+package.
+
 `npm run dist:mac`, `dist:win` or `dist:linux` builds an installer into
 `release/`. Every push also builds all three on GitHub Actions (Mac, Windows,
 Linux); download them from the run's **Artifacts**.
