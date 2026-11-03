@@ -465,11 +465,17 @@ function Updates({ github, onToken }) {
             </Field>
             <Field label="Latest build">
               <span className="small mono" style={{ height: 36, display: 'flex', alignItems: 'center' }}>
-                {!latest ? 'Checking…' : !latest.run ? 'No finished build yet' : `${latest.run.sha.slice(0, 7)} · ${ago(Date.parse(latest.run.at))} · ${latest.run.conclusion}${latest.run.ready ? '' : ' · no installer for this computer'}`}
+                {!latest ? 'Checking…' : !latest.run ? (latest.building ? 'Building now…' : 'No finished build yet') : `${latest.run.sha.slice(0, 7)} · ${ago(Date.parse(latest.run.at))} · ${latest.run.conclusion}`}
               </span>
             </Field>
           </div>
           {latest?.run && <p className="soft small">{latest.run.title}</p>}
+          {latest?.newer && (
+            <p className="err small">
+              The newest push ({latest.newer.sha.slice(0, 7)}, {ago(Date.parse(latest.newer.at))}) has no installer: its build {latest.newer.conclusion === 'success' ? "didn't upload one" : latest.newer.conclusion}. {latest.run ? 'Showing the last one that did.' : ''}
+              {latest.building ? ' Another build is running now.' : ''}
+            </p>
+          )}
           <div className="row-end">
             <button type="button" className="btn md quiet" onClick={() => setToken(' ')}>
               Change token

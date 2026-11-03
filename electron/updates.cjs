@@ -59,27 +59,26 @@ async function branches() {
   return list.map((b) => b.name).sort();
 }
 
-// The newest finished build on a branch, and whether it has this platform's installer.
+// The newest build on a branch that has this computer's installer. A run
+// that failed (or whose upload didn't make it) is skipped, and the page is
+// told when the very latest one is in that state.
 async function latest(branch) {
-  const runs = await gh(`/actions/workflows/${WORKFLOW}/runs?branch=${encodeURIComponent(branch)}&per_page=5`);
-  const done = (runs.workflow_runs || []).filter((r) => r.status === 'completed');
-  const latestRun = done[0] || null;
-  if (!latestRun) return { branch, run: null };
-  const { artifacts } = await gh(`/actions/runs/${latestRun.id}/artifacts`);
-  const artifact = pickArtifact(artifacts);
-  return {
-    branch,
-    run: {
-      id: latestRun.id,
-      sha: latestRun.head_sha,
-      title: latestRun.display_title,
-      at: latestRun.updated_at,
-      conclusion: latestRun.conclusion,
-      url: latestRun.html_url,
-      ready: Boolean(artifact),
-      size: artifact?.size_in_bytes || 0,
-    },
-  };
+  const runs = await gh(`/actions/workflows/${WORKFLOW}/runs?branch=${encodeURIComponent(branch)}&per_page=8`);
+  const all = runs.workflow_runs || [];
+  const done = all.filter((r) => r.status === 'completed');
+  const describe = (r, artifact) => ({ id: r.id, sha: r.head_sha, title: r.display_title, at: r.updated_at, conclusion: r.conclusion, url: r.html_url, ready: Boolean(artifact), size: artifact?.size_in_bytes || 0 });
+  let newest = null;
+  for (const r of done) {
+    const { artifacts } = await gh(`/actions/runs/${r.id}/artifacts`);
+    const artifact = pickArtifact(artifacts);
+    if (artifact) {
+      const run = describe(r, artifact);
+      // Say when a newer push has no installer, so a failed build isn't mistaken for "up to date".
+      return { branch, run, newer: newest, building: all.find((x) => x.status !== 'completed') ? true : false };
+    }
+    if (!newest) newest = describe(r, null);
+  }
+  return { branch, run: null, newer: newest, building: all.some((x) => x.status !== 'completed') };
 }
 
 // GitHub answers an artifact download with a redirect to a signed storage
