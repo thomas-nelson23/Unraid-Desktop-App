@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('cubecrusher', {
   getSettings: call('settings:get'),
   setSettings: call('settings:set'),
   openExternal: call('open:external'),
+  captureKeys: (on) => ipcRenderer.send('keys:capture', on),
   hermes: {
     list: call('hermes:list'),
     test: call('hermes:test'),

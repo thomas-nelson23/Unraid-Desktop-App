@@ -140,3 +140,6 @@ export function usePollFn(fn, { key = '', enabled = true, every = 0 } = {}) {
 export function usePoll(path, { enabled = true, every = 0 } = {}) {
   return usePollFn(path ? () => api(path) : null, { key: path, enabled: enabled && Boolean(path), every });
 }
+// While a remote screen has the keyboard, the app's own shortcuts (reload,
+// close, quit) go to the remote computer instead.
+export const captureKeys = (on) => bridge?.captureKeys?.(Boolean(on));

@@ -33,6 +33,16 @@ something is set up, every page shows sample data and says so.
   user), the optional dashboard server, the weather place, Hermes instances,
   Docker servers, and in-app updates: pick a branch and install its latest
   GitHub Actions build.
+- **VMs** (remote control, through Home-Dashboard): one page with two tabs, VM console and RDP, and
+  one slim bar (the tab switch, a drop-down of VMs or computers, the
+  connection's state and tools); the screen fills the rest. **VM console**
+  shows a VM's own screen (VNC, the console Unraid opens) with Ctrl+Alt+Del
+  and other keys, paste-by-typing, snapshots, fit or 1:1, picture quality and
+  full screen. **RDP** opens a computer's desktop through guacd, the Guacamole
+  container Home-Dashboard's Remote page already uses, and can add computers
+  and wake sleeping ones. Both tabs stay connected while you switch tabs or
+  pages, and while a screen has the keyboard the app's own shortcuts (reload,
+  close) go to the remote computer.
 - **Overview** (design option 4, "Story"): a plain-language summary and a
   verdict for compute, memory, each GPU and storage; CPU, GPU and RAM lanes
   for the time the app has been open; an ask bar for Hermes. **Array &
@@ -84,6 +94,9 @@ npm test
   first install; the download shows its progress, can be cancelled, and gives
   up if nothing arrives for a minute.
 - `electron/preload.cjs` gives the page a small `window.cubecrusher` bridge.
+- The VMs page's screens are WebSockets from the page to the server. The
+  main process adds the sign-in cookie and the Origin the server checks to
+  those sockets (only for the configured server's `/api/` paths).
 - `src/` is the React app. `src/steeze/` is a copy of the Steeze tokens,
   components and fonts.
 

@@ -8,6 +8,7 @@ import Docker from './pages/Docker.jsx';
 import Overview from './pages/Overview.jsx';
 import Settings from './pages/Settings.jsx';
 import NotBuilt from './pages/NotBuilt.jsx';
+import Remote from './pages/Remote.jsx';
 import { checkConnection, desktop, usePoll, usePollFn } from './lib/api.js';
 import { demoContainerCount, demoNeeds, demoServer } from './lib/demo.js';
 import { needsFromServer } from './lib/needs.js';
@@ -46,6 +47,11 @@ export default function App() {
   const [hermesTab, setHermesTab] = useState('agents');
   const [draft, setDraft] = useState('');
   const hermes = useHermesList();
+  // The VMs page stays open once visited, so its screens stay connected.
+  const [remoteOpen, setRemoteOpen] = useState(false);
+  useEffect(() => {
+    if (page === 'vms') setRemoteOpen(true);
+  }, [page]);
 
   const refresh = useCallback(async () => setConn(await checkConnection()), []);
   useEffect(() => {
@@ -90,7 +96,7 @@ export default function App() {
   else if (page === 'overview' || page === 'array') content = <Overview conn={conn} server={server} history={history} tab={page} onTab={setPage} onAsk={askHermes} />;
   else if (page === 'docker') content = <Docker conn={conn} onPage={setPage} />;
   else if (page === 'settings') content = <Settings conn={conn} onConnect={() => setConnecting(true)} onChanged={refresh} hermesList={hermes.list} onHermesChanged={hermes.refresh} />;
-  else content = <NotBuilt page={page} />;
+  else if (page !== 'vms') content = <NotBuilt page={page} />;
 
   return (
     <div className="app hex">
@@ -105,7 +111,12 @@ export default function App() {
           )}
         </TopBar>
         <div className="edge" />
-        <div className="page-scroll">{content}</div>
+        {content && <div className="page-scroll">{content}</div>}
+        {remoteOpen && (
+          <div className="page-scroll" hidden={page !== 'vms'}>
+            <Remote conn={conn} shown={page === 'vms'} />
+          </div>
+        )}
       </main>
       {connecting && <ConnectDialog conn={conn} onClose={() => setConnecting(false)} onChanged={refresh} />}
     </div>

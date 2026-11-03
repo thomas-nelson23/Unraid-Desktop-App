@@ -18,11 +18,13 @@
     "dist:linux": "vite build && electron-builder --linux"
   },
   "devDependencies": {
+    "@novnc/novnc": "^1.7.0",
     "@vitejs/plugin-react": "^4.7.0",
     "concurrently": "^9.2.5",
     "cross-env": "^7.0.3",
     "electron": "^38.8.6",
     "electron-builder": "^26.18.0",
+    "guacamole-common-js": "^1.5.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "vite": "^6.4.5",

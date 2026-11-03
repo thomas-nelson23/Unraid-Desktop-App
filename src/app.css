@@ -1182,3 +1182,241 @@ button {
 /* Two inputs in one field (SSH user and port). */
 .field .two { display: grid; grid-template-columns: 1fr 72px; gap: 8px; }
 .inst .inst-acts input[type='checkbox'] { accent-color: var(--cyan); }
+/* VMs page: remote control (VM console and RDP tabs). No page header: a
+   slim bar leads, and the screen fills the rest of the window. */
+.rc-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.rc {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 16px 16px;
+}
+.rc[hidden] {
+  display: none;
+}
+.rc .btn,
+.rc .seg button {
+  height: 28px;
+}
+.rc .seg {
+  flex: none;
+}
+.rc-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-height: 40px;
+}
+.rc-sp {
+  flex: 1;
+}
+.rc-tabs button {
+  padding: 0 14px;
+}
+.rc-li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 240px;
+  height: 36px;
+  padding: 0 12px 0 8px;
+  border: 1px solid var(--hair);
+  border-radius: 2px;
+  background: var(--panel);
+  color: var(--text-soft);
+  text-align: left;
+  cursor: pointer;
+}
+.rc-li:hover {
+  border-color: var(--hair-strong);
+  color: var(--text-bright);
+}
+.rc-li.cur {
+  border-color: var(--cyan-45);
+  background: var(--cyan-8);
+  color: var(--text-bright);
+}
+.rc-li .led {
+  flex: none;
+  height: 20px;
+  margin: 0;
+}
+.rc-name {
+  display: grid;
+  min-width: 0;
+  line-height: 1.25;
+}
+.rc-name b {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rc-name small {
+  font: 10px var(--font-mono);
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rc-pill {
+  flex: none;
+}
+.rc-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.rc-warn,
+.rc-note,
+.rc-err {
+  margin: 0;
+}
+.rc-keys {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 6px;
+  background: var(--well);
+  border: 1px solid var(--hair);
+  border-radius: 2px;
+}
+.rc-type {
+  display: flex;
+  gap: 6px;
+  flex: 1 1 280px;
+}
+.rc-input {
+  height: 28px;
+  padding: 0 10px;
+  background: var(--well);
+  border: 1px solid var(--hair-strong);
+  border-radius: 2px;
+  color: var(--text-bright);
+  font: 13px var(--font-mono);
+  outline: 0;
+  box-sizing: border-box;
+}
+.rc-input:focus {
+  border-color: var(--cyan);
+}
+.rc-type .rc-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The screen: flush, with only a hairline round it. */
+.rc-stage {
+  position: relative;
+  flex: 1;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rc-screen-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.rc-screen {
+  flex: 1;
+  min-height: 0;
+  background: #000;
+  border: 1px solid var(--hair);
+  overflow: hidden;
+  outline: none;
+}
+.rc-screen:focus-within,
+.rc-screen:focus {
+  border-color: var(--cyan-45);
+}
+.rc-screen.full {
+  overflow: auto;
+}
+/* guacd's display sits centred while it fits and scrolls at full size. */
+.rc-screen.guac {
+  display: grid;
+}
+.rc-screen.guac > div {
+  margin: auto;
+}
+.rc-over {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 10px;
+  text-align: center;
+  background: rgba(1, 12, 20, 0.86);
+}
+.rc-over .rc-input {
+  width: 240px;
+}
+.rc-splash {
+  flex: 1;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  background: var(--well);
+  border: 1px solid var(--hair);
+}
+.rc-splash p {
+  margin: 0;
+  max-width: 460px;
+}
+.rc-big {
+  font: 600 20px/1.3 var(--font-sans);
+  color: var(--text-bright);
+}
+.rc-stage:fullscreen {
+  padding: 0;
+  background: #000;
+}
+
+/* The VMs or computers, in a drop-down at the start of the bar. */
+.rc-pick {
+  position: relative;
+}
+.rc-caret {
+  margin-left: 4px;
+  color: var(--text-dim);
+}
+.rc-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 5;
+  display: grid;
+  gap: 4px;
+  min-width: 260px;
+  padding: 6px;
+  background: var(--menu, var(--panel));
+  border: 1px solid var(--hair-strong);
+  border-radius: 2px;
+  box-shadow: var(--overlay-shadow);
+}
+.rc-menu .rc-li {
+  max-width: none;
+  width: 100%;
+}
+
+.rc-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}

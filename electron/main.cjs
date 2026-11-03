@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, session, shell } = require('electron');
 const path = require('node:path');
 const settings = require('./settings.cjs');
 const dashboard = require('./dashboard.cjs');
@@ -31,6 +31,34 @@ docker.register(ipcMain);
 unraid.register(ipcMain);
 weather.register(ipcMain);
 updates.register(ipcMain, () => win);
+
+// The VMs page's screens are WebSockets straight from the page to the server.
+// The page isn't served by the server, so the browser would send neither the
+// sign-in cookie (it's SameSite) nor an Origin the server accepts. Add both,
+// for the configured server's /api/ sockets only.
+function signScreenSockets() {
+  session.defaultSession.webRequest.onBeforeSendHeaders(async (details, callback) => {
+    try {
+      const { serverUrl } = settings.get();
+      if (!serverUrl || !/^wss?:/.test(details.url)) return callback({});
+      const server = new URL(serverUrl);
+      const url = new URL(details.url);
+      if (url.host !== server.host || !url.pathname.startsWith('/api/')) return callback({});
+      const cookies = await session.defaultSession.cookies.get({ url: serverUrl });
+      const requestHeaders = { ...details.requestHeaders, Origin: server.origin };
+      if (cookies.length) requestHeaders.Cookie = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+      callback({ requestHeaders });
+    } catch {
+      callback({});
+    }
+  });
+}
+
+// While a remote screen has the keyboard, Ctrl+R, Ctrl+W and the like go to
+// the remote computer instead of reloading or closing the app.
+ipcMain.on('keys:capture', (event, on) => {
+  event.sender.setIgnoreMenuShortcuts(Boolean(on));
+});
 
 function createWindow() {
   win = new BrowserWindow({
@@ -70,6 +98,7 @@ function createWindow() {
 app.whenReady().then(async () => {
   await settings.load();
   unraid.ready();
+  signScreenSockets();
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
