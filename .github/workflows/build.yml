@@ -6,9 +6,10 @@ name: Build
 # AppImage, plus the pacman package for CachyOS.
 #
 # The repository is private, so artifacts count against GitHub's storage
-# quota (500 MB on the free plan). Every push therefore replaces the
-# previous push's artifacts on the same branch, keeps them a week, and
-# skips the big disk images and the Intel Mac zip unless asked for.
+# quota (500 MB on the free plan). A cleanup job therefore runs first and
+# drops every artifact except the newest run's on each branch that still
+# exists; a push also replaces its own branch's artifacts, keeps them a
+# week, and skips the big disk images and the Intel Mac zip unless asked for.
 on:
   push:
   workflow_dispatch:
@@ -23,7 +24,37 @@ permissions:
   actions: write
 
 jobs:
+  # Deletes stale artifacts: everything from branches that are gone, and all
+  # but the newest run's on every other branch. Without this, every push on
+  # every thread branch would sit in storage for 90 days.
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const branches = new Set((await github.paginate(github.rest.repos.listBranches, { owner, repo, per_page: 100 })).map((b) => b.name));
+            const artifacts = (await github.paginate(github.rest.actions.listArtifactsForRepo, { owner, repo, per_page: 100 })).filter((a) => !a.expired);
+            const newest = {};
+            for (const a of artifacts) {
+              const b = a.workflow_run?.head_branch;
+              if (b && branches.has(b) && b !== process.env.GITHUB_REF_NAME) newest[b] = Math.max(newest[b] || 0, a.workflow_run.id);
+            }
+            let freed = 0;
+            for (const a of artifacts) {
+              const b = a.workflow_run?.head_branch;
+              const id = a.workflow_run?.id;
+              if (id === context.runId) continue;
+              if (b && branches.has(b) && b !== process.env.GITHUB_REF_NAME && id === newest[b]) continue;
+              await github.rest.actions.deleteArtifact({ owner, repo, artifact_id: a.id });
+              freed += a.size_in_bytes;
+              core.info(`Deleted ${a.name} (${b || 'no branch'}, run ${id}, ${Math.round(a.size_in_bytes / 1e6)} MB)`);
+            }
+            core.notice(`Freed ${Math.round(freed / 1e6)} MB of old build artifacts.`);
+
   build:
+    needs: cleanup
     strategy:
       fail-fast: false
       matrix:
@@ -56,20 +87,6 @@ jobs:
         run: npm run dist:${{ matrix.target }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
-
-      # Make room: drop this platform's artifacts from earlier runs on the same branch.
-      - uses: actions/github-script@v7
-        with:
-          script: |
-            const branch = process.env.GITHUB_REF_NAME;
-            const prefix = 'cubecrusher-${{ matrix.target }}';
-            const { data } = await github.rest.actions.listArtifactsForRepo({ owner: context.repo.owner, repo: context.repo.repo, per_page: 100 });
-            for (const a of data.artifacts) {
-              if (a.expired || a.workflow_run?.id === context.runId) continue;
-              if (!a.name.startsWith(prefix) || a.workflow_run?.head_branch !== branch) continue;
-              await github.rest.actions.deleteArtifact({ owner: context.repo.owner, repo: context.repo.repo, artifact_id: a.id });
-              core.info(`Deleted ${a.name} from run ${a.workflow_run.id} (${Math.round(a.size_in_bytes / 1e6)} MB)`);
-            }
 
       # Mac: the updater takes the zip for its chip; the disk images are for a first install.
       - uses: actions/upload-artifact@v4
