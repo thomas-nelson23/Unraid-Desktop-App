@@ -3,6 +3,8 @@ import { desktop } from '../../lib/api.js';
 import { ago } from '../../lib/format.js';
 import { load, save } from '../../lib/store.js';
 import Markdown from '../../lib/markdown.jsx';
+import { extractMedia, withoutMediaLines } from '../../lib/media.js';
+import MediaItem from './MediaItem.jsx';
 import {
   FEATURED,
   STUDIO_PREFIX,
@@ -119,6 +121,22 @@ function UserBubble({ content, images }) {
   );
 }
 
+// The files a reply names (fetched from Hermes) and any pictures it carries.
+function Media({ iid, content, images, onOpen }) {
+  const found = useMemo(() => extractMedia(content), [content]);
+  if (!found.length && !images?.length) return null;
+  return (
+    <div className="media-row">
+      {images?.map((src, i) => (
+        <img key={`i${i}`} className="inline-pic" src={src} alt="" loading="lazy" />
+      ))}
+      {found.map((f) => (
+        <MediaItem key={f.path} iid={iid} path={f.path} kind={f.kind} onOpen={onOpen} />
+      ))}
+    </div>
+  );
+}
+
 // The "/" menu above the composer.
 function SlashMenu({ state, options, sel, onPick }) {
   if (!state) return null;
@@ -161,11 +179,27 @@ function SlashMenu({ state, options, sel, onPick }) {
 // The chat with one Hermes: its chats on the left (featured first), the
 // conversation, and a composer with a "/" command menu. The Studio uses the
 // same chat with its own sessions, file attachments and a media panel.
-export default function Chat({ instance, instances = [], onSwitch, draft, onDraftUsed, context, mode = 'chat', attachments = [], onAttachments, onSent, onTurnDone, onCurrent, extra, drop, onPickFiles, side }) {
+export default function Chat({ defaultIid, instances = [], profileKey = 'chatProfile', draft, onDraftUsed, context, mode = 'chat', attachments = [], onAttachments, onSent, onTurnDone, onCurrent, onMedia, onProfile, onOpenMedia, extra, drop, onPickFiles, side }) {
   const hermes = desktop?.hermes;
   const studio = mode === 'studio';
+  // Which Hermes profile this chat runs on, remembered per page (Chat and
+  // Studio each keep their own).
+  const [chosen, setChosen] = useState(() => load(profileKey, null));
+  const instance = instances.find((h) => h.id === chosen) || instances.find((h) => h.id === defaultIid) || instances[0] || null;
   const iid = instance?.id ?? null;
-  const [sessions, setSessions] = useState({ list: [], error: null, loading: false });
+  const switchProfile = useCallback(
+    (id) => {
+      setChosen(id);
+      save(profileKey, id);
+    },
+    [profileKey],
+  );
+  useEffect(() => {
+    onProfile?.(iid);
+  }, [iid, onProfile]);
+  const [featuredProfiles, setFeaturedProfiles] = useState(() => load('featuredProfiles', {}));
+  const [pendingOpen, setPendingOpen] = useState(null);
+  const [sessions, setSessions] = useState({ list: [], error: null, loading: false, iid: null });
   const [current, setCurrent] = useState(null);
   const [featured, setFeatured] = useState(null); // a featured chat waiting for its first message
   const [messages, setMessages] = useState([]);
@@ -208,7 +242,7 @@ export default function Chat({ instance, instances = [], onSwitch, draft, onDraf
     if (!hermes || !iid) return;
     setSessions((s) => ({ ...s, loading: true }));
     try {
-      setSessions({ list: (await hermes.sessions()).sessions, error: null, loading: false });
+      setSessions({ list: (await hermes.sessions(iid)).sessions, error: null, loading: false, iid });
     } catch (err) {
       setSessions((s) => ({ list: s.list, error: err.message, loading: false }));
     }
@@ -222,7 +256,7 @@ export default function Chat({ instance, instances = [], onSwitch, draft, onDraf
     setMessages([]);
     setReply(null);
     setModels(null);
-    setSessions({ list: [], error: null, loading: false });
+    setSessions({ list: [], error: null, loading: false, iid: null });
     loadSessions();
   }, [loadSessions]);
 
@@ -243,14 +277,14 @@ export default function Chat({ instance, instances = [], onSwitch, draft, onDraf
     setLoadingChat(true);
     setShown(WINDOW);
     hermes
-      .messages(current)
+      .messages(iid, current)
       .then((m) => alive && setMessages(m))
       .catch((err) => alive && setError(err.message))
       .finally(() => alive && setLoadingChat(false));
     return () => {
       alive = false;
     };
-  }, [hermes, current]);
+  }, [hermes, current]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!hermes) return undefined;
@@ -283,7 +317,7 @@ export default function Chat({ instance, instances = [], onSwitch, draft, onDraf
     if (!needModels || models || !hermes) return;
     setModels({ loading: true, providers: [] });
     hermes
-      .models()
+      .models(iid)
       .then(setModels)
       .catch((err) => {
         setModels({ providers: [] });
@@ -310,6 +344,14 @@ export default function Chat({ instance, instances = [], onSwitch, draft, onDraf
   };
 
   const openFeatured = (fid) => {
+    // A featured chat can live on its own profile (maintenance on the one
+    // with SSH, say): switch there first, then open it once its chats load.
+    const target = featuredProfiles[fid];
+    if (target && target !== iid && instances.some((h) => h.id === target)) {
+      setPendingOpen(fid);
+      switchProfile(target);
+      return;
+    }
     const sid = links[fid];
     if (sid && sessions.list.some((s) => s.id === sid)) {
       setFeatured(null);
@@ -317,6 +359,32 @@ export default function Chat({ instance, instances = [], onSwitch, draft, onDraf
       setNote(null);
     } else newChat(fid);
   };
+
+  useEffect(() => {
+    if (!pendingOpen || sessions.loading || sessions.iid !== iid) return;
+    const fid = pendingOpen;
+    setPendingOpen(null);
+    const sid = load(`featuredLinks:${iid}`, {})[fid];
+    if (sid && sessions.list.some((s) => s.id === sid)) {
+      setFeatured(null);
+      setCurrent(sid);
+    } else newChat(fid);
+  }, [pendingOpen, sessions, iid]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const setFeaturedProfile = (fid, id) => {
+    const next = { ...featuredProfiles, [fid]: id };
+    if (!id) delete next[fid];
+    setFeaturedProfiles(next);
+    save('featuredProfiles', next);
+  };
+
+  // Files Hermes named in this chat's replies, for the Studio's library.
+  useEffect(() => {
+    if (!onMedia || !current) return;
+    const found = [];
+    for (const m of messages) if (m.role === 'assistant') for (const x of extractMedia(m.content)) found.push({ ...x, iid, sid: current, at: m.at || Date.now() });
+    if (found.length) onMedia(found);
+  }, [messages]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const modelFor = current ? overrides[current] : pendingModel;
   const setModelFor = (choice) => {
@@ -336,24 +404,24 @@ export default function Chat({ instance, instances = [], onSwitch, draft, onDraf
       if (cmd === 'model') {
         setModelFor(arg);
         setNote(`${arg.model} answers from the next message in this chat.`);
-      } else if (cmd === 'instance') onSwitch?.(arg);
+      } else if (cmd === 'instance') switchProfile(arg);
       else if (cmd === 'snapshot') setSnapshot(true);
       else if (cmd === 'featured') openFeatured(arg);
       else if (cmd === 'new') newChat();
       else if (cmd === 'rename') {
         if (!current) return setNote('Send a message first; then the chat can be renamed.');
-        await hermes.rename(current, studio && !arg.startsWith(STUDIO_PREFIX) ? STUDIO_PREFIX + arg : arg);
+        await hermes.rename(iid, current, studio && !arg.startsWith(STUDIO_PREFIX) ? STUDIO_PREFIX + arg : arg);
         await loadSessions();
         setNote(`Renamed to “${arg}”.`);
       } else if (cmd === 'usage') {
         if (!current) return setNote('Nothing used yet in a new chat.');
-        const d = await hermes.session(current);
+        const d = await hermes.session(iid, current);
         const n = (v) => (v == null ? '—' : v.toLocaleString());
         setNote(`${d.model || 'Model unknown'}${d.provider ? ` via ${d.provider}` : ''} · ${n(d.inputTokens)} in · ${n(d.outputTokens)} out · ${n(d.toolCalls)} tool calls${d.cost != null ? ` · $${d.cost.toFixed(4)}${d.costEstimated ? ' (estimate)' : ''}` : ''}`);
       } else if (cmd === 'delete') {
         if (!current) return newChat();
         if (!window.confirm('Delete this chat from Hermes? This can’t be undone.')) return;
-        await hermes.deleteSession(current);
+        await hermes.deleteSession(iid, current);
         for (const [fid, sid] of Object.entries(links)) if (sid === current) link(fid, null);
         newChat();
         await loadSessions();
@@ -400,7 +468,7 @@ export default function Chat({ instance, instances = [], onSwitch, draft, onDraf
       let id = current;
       if (!id) {
         const title = studio ? STUDIO_PREFIX + typed.slice(0, 50) : f ? f.name : typed.slice(0, 60);
-        id = (await hermes.createSession({ title })).id;
+        id = (await hermes.createSession(iid, { title })).id;
         if (f) link(f.id, id);
         if (pendingModel) {
           const next = { ...overrides, [id]: pendingModel };
@@ -412,7 +480,7 @@ export default function Chat({ instance, instances = [], onSwitch, draft, onDraf
         currentRef.current = id;
       }
       const m = (current ? overrides[current] : pendingModel) || null;
-      const runId = await hermes.chat(id, message, { ...(m || {}), images });
+      const runId = await hermes.chat(iid, id, message, { ...(m || {}), images });
       runRef.current = runId;
       setReply({ runId, content: '', steps: [] });
       onSent?.(id);
@@ -452,7 +520,7 @@ export default function Chat({ instance, instances = [], onSwitch, draft, onDraf
     const a = reply?.approval;
     if (!a) return;
     try {
-      await hermes.approve({ runId: a.runId, requestId: a.requestId, generation: a.generation, choice });
+      await hermes.approve({ iid, runId: a.runId, requestId: a.requestId, generation: a.generation, choice });
       setReply((r) => (r ? { ...r, approval: null } : r));
     } catch (err) {
       setError(err.message);
@@ -487,9 +555,9 @@ export default function Chat({ instance, instances = [], onSwitch, draft, onDraf
           </button>
         </div>
         {instances.length > 1 && (
-          <div className="inst" role="tablist" aria-label="Hermes instance">
+          <div className="inst-tabs" role="tablist" aria-label="Hermes instance">
             {instances.map((h) => (
-              <button key={h.id} role="tab" aria-selected={h.id === iid} className={h.id === iid ? 'checked' : undefined} onClick={() => onSwitch?.(h.id)}>
+              <button key={h.id} role="tab" aria-selected={h.id === iid} className={h.id === iid ? 'checked' : undefined} onClick={() => switchProfile(h.id)} title={h.profile ? `Profile ${h.profile}` : h.url}>
                 {h.name}
               </button>
             ))}
@@ -510,12 +578,25 @@ export default function Chat({ instance, instances = [], onSwitch, draft, onDraf
                     <span>
                       <b>{f.name}</b>
                       <small>{f.blurb}</small>
+                      {instances.length > 1 && (
+                        <select value={featuredProfiles[f.id] || ''} onChange={(e) => setFeaturedProfile(f.id, e.target.value)} onClick={(e) => e.preventDefault()} aria-label={`Profile for ${f.name}`}>
+                          <option value="">Runs on: whichever is picked</option>
+                          {instances.map((h) => (
+                            <option key={h.id} value={h.id}>
+                              Runs on: {h.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </span>
                   </label>
                 ))
               : shownFeatured.map((f) => (
                   <button key={f.id} className={`feat${activeFeatured?.id === f.id ? ' cur' : ''}`} onClick={() => openFeatured(f.id)}>
-                    <b>{f.name}</b>
+                    <b>
+                      {f.name}
+                      {featuredProfiles[f.id] && instances.length > 1 && <span className="prof">{instances.find((h) => h.id === featuredProfiles[f.id])?.name}</span>}
+                    </b>
                     <small>{f.blurb}</small>
                   </button>
                 ))}
@@ -546,7 +627,7 @@ export default function Chat({ instance, instances = [], onSwitch, draft, onDraf
                 {modelFor.model} ×
               </button>
             )}
-            {current && <span className="eyebrow">{instance.name}</span>}
+            <span className="eyebrow" title={instance.profile ? `Profile ${instance.profile}` : instance.url}>{instance.name}</span>
           </div>
         </div>
         <div className="msgs">
@@ -584,14 +665,15 @@ export default function Chat({ instance, instances = [], onSwitch, draft, onDraf
             ) : (
               <div className="botturn" key={m.id ?? `a${i}`}>
                 {m.steps?.length > 0 && <Steps steps={m.steps} />}
-                <Markdown className="bub bot" text={m.content} />
+                <Markdown className="bub bot" text={withoutMediaLines(m.content)} />
+                <Media iid={iid} content={m.content} images={m.images} onOpen={onOpenMedia} />
               </div>
             ),
           )}
           {reply && (
             <div className="botturn">
               {(reply.steps.length > 0 || !reply.content) && <Steps steps={reply.steps} live />}
-              {reply.content && <Markdown className="bub bot" text={reply.content} />}
+              {reply.content && <Markdown className="bub bot" text={withoutMediaLines(reply.content)} />}
               {reply.approval && <Approval approval={reply.approval} onAnswer={answer} />}
             </div>
           )}

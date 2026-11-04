@@ -1,10 +1,18 @@
-const { net } = require('electron');
+const { net, app } = require('electron');
+const crypto = require('node:crypto');
+const fsp = require('node:fs/promises');
+const path = require('node:path');
+const ssh = require('./ssh.cjs');
+const media = require('./hermesMedia.cjs');
 const settings = require('./settings.cjs');
 const { parseEvents, withImages, cleanImages, toChatEvent, toSession, toSessionDetail, toTranscript, toModelOptions, cleanUrl, modelFrom, isPage, isLoginWall, DASHBOARD_HINT } = require('./hermesShape.cjs');
 
 // Talks to Hermes Agent's API server directly, for each Hermes instance
 // Thomas has set up. Hermes's own API sits beside its OpenAI-style /v1.
 const root = (url) => url.replace(/\/v1$/, '');
+// A named Hermes profile on a shared listener answers under /p/<profile>/.
+const PROFILE = /^[A-Za-z0-9_-]{1,40}$/;
+const base = (h) => `${root(h.url)}${h.profile ? `/p/${h.profile}` : ''}`;
 const headers = (key) => ({ 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) });
 
 function current() {
@@ -27,7 +35,7 @@ async function call(h, method, apiPath, body, signal) {
   if (!h) throw new Error('No Hermes instance set up yet. Add one under Hermes instances.');
   let res;
   try {
-    res = await net.fetch(`${root(h.url)}${apiPath}`, {
+    res = await net.fetch(`${base(h)}${apiPath}`, {
       method,
       headers: headers(h.key),
       body: body ? JSON.stringify(body) : undefined,
@@ -52,7 +60,7 @@ async function statusAll() {
     hermes.map(async (h) => {
       const out = { id: h.id, online: false, model: null, error: null };
       try {
-        const res = await net.fetch(`${h.url}/models`, { headers: headers(h.key), signal: AbortSignal.timeout(4000) });
+        const res = await net.fetch(`${base(h)}/v1/models`, { headers: headers(h.key), signal: AbortSignal.timeout(4000) });
         if (!res.ok) throw await upstreamError(res, h);
         const json = await res.json().catch(() => ({}));
         out.online = true;
@@ -77,11 +85,13 @@ async function save(instances, currentId) {
   for (const raw of instances || []) {
     const url = cleanUrl(raw.url);
     if (!url) throw new Error(`"${raw.name || raw.url}" doesn't look like a Hermes address.`);
+    if (raw.profile && !PROFILE.test(String(raw.profile).trim())) throw new Error(`"${raw.profile}" isn't a profile name (letters, numbers, - and _).`);
     const was = old.find((h) => h.id === raw.id);
     next.push({
       id: was?.id || settings.newId(),
       name: String(raw.name || '').trim().slice(0, 60) || url.replace(/^https?:\/\//, ''),
       url,
+      profile: PROFILE.test(String(raw.profile || '').trim()) ? String(raw.profile).trim() : '',
       key: typeof raw.key === 'string' ? raw.key.trim().slice(0, 500) : was?.key || '',
     });
   }
@@ -128,9 +138,10 @@ async function chat(win, h, id, body, runId) {
 
 // Tries an address and key as typed, before they're saved, and says what
 // came back.
-async function test({ url: rawUrl, key, id }) {
-  const url = cleanUrl(rawUrl);
-  if (!url) throw new Error("That doesn't look like a Hermes address.");
+async function test({ url: rawUrl, key, id, profile }) {
+  const cleaned = cleanUrl(rawUrl);
+  const url = cleaned && PROFILE.test(String(profile || '').trim()) ? `${root(cleaned)}/p/${String(profile).trim()}/v1` : cleaned;
+  if (!cleaned) throw new Error("That doesn't look like a Hermes address.");
   const saved = settings.get().hermes.find((h) => h.id === id);
   const useKey = typeof key === 'string' && key.trim() ? key.trim() : saved?.key || '';
   let res;
@@ -173,30 +184,114 @@ function toNamed(json) {
     .filter((x) => x.name);
 }
 
+// The instance a call is for: the one the page names, else the default.
+function pick(iid) {
+  const { hermes } = settings.get();
+  return (iid && hermes.find((h) => h.id === iid)) || current();
+}
+
+// Files Hermes names in its replies live inside its container. They come
+// over SSH (docker exec … cat) from the server that runs it, and are kept in
+// this app's cache so a chat opened again doesn't fetch them twice.
+const containers = new Map();
+function serverFor(h) {
+  let host = '';
+  try {
+    host = new URL(h.url).hostname;
+  } catch {}
+  const unraid = require('./unraid.cjs');
+  const list = [...(unraid.configured() ? [unraid.sshServer()] : []), ...settings.get().servers];
+  const s = list.find((x) => x.host === host) || (unraid.configured() ? unraid.sshServer() : null);
+  if (!s?.host) throw new Error("To fetch Hermes's files the app needs SSH to the server Hermes runs on. Set up Cubecrusher (with SSH) in Settings.");
+  return s;
+}
+async function containerOf(h, server) {
+  if (containers.has(h.id)) return containers.get(h.id);
+  let port = null;
+  try {
+    port = Number(new URL(h.url).port) || null;
+  } catch {}
+  const out = await ssh.run(server, ['docker', 'ps', '--format', `'{{.Names}}|{{.Ports}}'`], { timeout: 15_000 });
+  const name = media.containerFor(out, port);
+  if (!name) throw new Error(`Couldn't tell which container on ${server.name} is ${h.name} (looked for port ${port}).`);
+  containers.set(h.id, name);
+  return name;
+}
+const cacheDir = () => path.join(app.getPath('userData'), 'hermes-media');
+const cacheName = (h, p) => `${crypto.createHash('sha1').update(`${h.id}\n${p}`).digest('hex').slice(0, 24)}.${p.split('.').pop().toLowerCase()}`;
+
+async function fetchFile(h, rawPath) {
+  const p = media.safeMediaPath(rawPath);
+  if (!p) throw new Error("That isn't a media file the app can fetch.");
+  const name = cacheName(h, p);
+  const file = path.join(cacheDir(), name);
+  const out = { url: `cubemedia://file/${name}`, kind: media.kindOf(p), name: p.split('/').pop(), path: p };
+  try {
+    const st = await fsp.stat(file);
+    if (st.size > 0) return { ...out, size: st.size };
+  } catch {}
+  const server = serverFor(h);
+  const container = await containerOf(h, server);
+  let bytes;
+  try {
+    bytes = await ssh.runBinary(server, media.readCommand(container, p));
+  } catch (err) {
+    containers.delete(h.id);
+    throw new Error(/No such file|can't open/i.test(err.message) ? `${h.name} no longer has ${p}.` : err.message);
+  }
+  if (!bytes.length) throw new Error(`${p} is empty.`);
+  await fsp.mkdir(cacheDir(), { recursive: true });
+  await fsp.writeFile(file, bytes);
+  return { ...out, size: bytes.length };
+}
+
+// A file from this computer into Hermes's uploads folder, so Hermes (and
+// ComfyUI through it) can work on it. Returns the path inside the container.
+async function uploadFile(h, { name, bytes }) {
+  const data = Buffer.from(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []));
+  if (!data.length) throw new Error('That file is empty.');
+  if (data.length > 300 * 1024 * 1024) throw new Error('Files over 300 MB are too big to send.');
+  const server = serverFor(h);
+  const container = await containerOf(h, server);
+  const where = (await ssh.runBinary(server, media.writeCommand(container, media.safeUploadName(name)), { input: data, timeout: 300_000 })).toString().trim();
+  if (!where.startsWith('/')) throw new Error(`${h.name} didn't say where the file went.`);
+  return { path: where, filename: where.split('/').pop(), kind: media.kindOf(where) || 'file' };
+}
+
+// Serves cached files to the page as cubemedia://file/<name>.
+function serveMedia(protocol) {
+  const { pathToFileURL } = require('node:url');
+  protocol.handle('cubemedia', (req) => {
+    const name = decodeURIComponent(new URL(req.url).pathname.replace(/^\/+/, ''));
+    if (!/^[a-f0-9]{24}\.[a-z0-9]{2,5}$/.test(name)) return new Response('Not found', { status: 404 });
+    return net.fetch(pathToFileURL(path.join(cacheDir(), name)).toString(), { headers: req.headers });
+  });
+}
+
 function register(ipcMain, getWindow) {
   ipcMain.handle('hermes:list', () => list());
   ipcMain.handle('hermes:test', (_e, raw) => test(raw || {}));
   ipcMain.handle('hermes:save', (_e, { instances, current: cur }) => save(instances, cur));
   ipcMain.handle('hermes:setCurrent', (_e, id) => setCurrent(id));
   ipcMain.handle('hermes:status', () => statusAll());
-  ipcMain.handle('hermes:sessions', async (_e, { offset = 0 } = {}) => {
-    const json = await (await call(current(), 'GET', `/api/sessions?limit=${PAGE}&offset=${offset}`)).json();
+  ipcMain.handle('hermes:sessions', async (_e, { iid, offset = 0 } = {}) => {
+    const json = await (await call(pick(iid), 'GET', `/api/sessions?limit=${PAGE}&offset=${Number(offset) || 0}`)).json();
     const sessions = (json.data || []).map(toSession);
     return { sessions, more: sessions.length >= PAGE };
   });
-  ipcMain.handle('hermes:session', async (_e, id) => toSessionDetail((await (await call(current(), 'GET', `/api/sessions/${encodeURIComponent(id)}`)).json()).session || {}));
-  ipcMain.handle('hermes:messages', async (_e, id) => toTranscript((await (await call(current(), 'GET', `/api/sessions/${encodeURIComponent(id)}/messages`)).json()).data));
-  ipcMain.handle('hermes:createSession', async (_e, { title } = {}) => {
+  ipcMain.handle('hermes:session', async (_e, { iid, id }) => toSessionDetail((await (await call(pick(iid), 'GET', `/api/sessions/${encodeURIComponent(id)}`)).json()).session || {}));
+  ipcMain.handle('hermes:messages', async (_e, { iid, id }) => toTranscript((await (await call(pick(iid), 'GET', `/api/sessions/${encodeURIComponent(id)}/messages`)).json()).data));
+  ipcMain.handle('hermes:createSession', async (_e, { iid, title } = {}) => {
     const body = typeof title === 'string' && title.trim() ? { title: title.trim().slice(0, 200) } : {};
-    return toSession((await (await call(current(), 'POST', '/api/sessions', body)).json()).session || {});
+    return toSession((await (await call(pick(iid), 'POST', '/api/sessions', body)).json()).session || {});
   });
-  ipcMain.handle('hermes:deleteSession', async (_e, id) => {
-    await call(current(), 'DELETE', `/api/sessions/${encodeURIComponent(id)}`);
+  ipcMain.handle('hermes:deleteSession', async (_e, { iid, id }) => {
+    await call(pick(iid), 'DELETE', `/api/sessions/${encodeURIComponent(id)}`);
   });
-  ipcMain.handle('hermes:models', async () => toModelOptions(await (await call(current(), 'GET', '/api/model/options?include_unconfigured=false', null, AbortSignal.timeout(30_000))).json()));
+  ipcMain.handle('hermes:models', async (_e, { iid } = {}) => toModelOptions(await (await call(pick(iid), 'GET', '/api/model/options?include_unconfigured=false', null, AbortSignal.timeout(30_000))).json()));
   // A turn, optionally on another model (Hermes takes model and provider per
   // request) and with pictures, sent as image parts beside the text.
-  ipcMain.handle('hermes:chat', (_e, { id, message, model, provider, images }) => {
+  ipcMain.handle('hermes:chat', (_e, { iid, id, message, model, provider, images }) => {
     const pics = cleanImages(images);
     if (typeof message !== 'string' || (!message.trim() && !pics.length)) throw new Error('Type a message first.');
     if (message.length > 200_000) throw new Error('That message is too long.');
@@ -204,19 +299,19 @@ function register(ipcMain, getWindow) {
     if (typeof model === 'string' && model.trim()) body.model = model.trim().slice(0, 200);
     if (typeof provider === 'string' && provider.trim()) body.provider = provider.trim().slice(0, 100);
     const runId = settings.newId();
-    chat(getWindow(), current(), id, body, runId);
+    chat(getWindow(), pick(iid), id, body, runId);
     return runId;
   });
-  ipcMain.handle('hermes:rename', async (_e, { id, title }) => {
+  ipcMain.handle('hermes:rename', async (_e, { iid, id, title }) => {
     const t = typeof title === 'string' ? title.trim().slice(0, 200) : '';
     if (!t) throw new Error('Give the chat a name.');
-    return toSession((await (await call(current(), 'PATCH', `/api/sessions/${encodeURIComponent(id)}`, { title: t })).json()).session || { id, title: t });
+    return toSession((await (await call(pick(iid), 'PATCH', `/api/sessions/${encodeURIComponent(id)}`, { title: t })).json()).session || { id, title: t });
   });
   // What Hermes can do: its skills and toolsets, read only.
-  ipcMain.handle('hermes:skills', async () => {
+  ipcMain.handle('hermes:skills', async (_e, { iid } = {}) => {
     const get = async (p) => {
       try {
-        return await (await call(current(), 'GET', p)).json();
+        return await (await call(pick(iid), 'GET', p)).json();
       } catch (err) {
         return { error: err.message };
       }
@@ -224,16 +319,27 @@ function register(ipcMain, getWindow) {
     const [skills, toolsets] = await Promise.all([get('/v1/skills'), get('/v1/toolsets')]);
     return { skills: toNamed(skills), toolsets: toNamed(toolsets), error: skills.error && toolsets.error ? skills.error : null };
   });
+  ipcMain.handle('hermes:file', (_e, { iid, path: p }) => fetchFile(pick(iid), p));
+  ipcMain.handle('hermes:saveFile', async (_e, { iid, path: p }) => {
+    const { dialog } = require('electron');
+    const f = await fetchFile(pick(iid), p);
+    const choice = await dialog.showSaveDialog(getWindow(), { defaultPath: media.safeUploadName(f.name) });
+    if (choice.canceled || !choice.filePath) return { saved: false };
+    await fsp.copyFile(path.join(cacheDir(), f.url.split('/').pop()), choice.filePath);
+    return { saved: true, path: choice.filePath };
+  });
+  ipcMain.handle('hermes:upload', (_e, { iid, name, bytes }) => uploadFile(pick(iid), { name, bytes }));
   ipcMain.handle('hermes:stop', (_e, runId) => {
     runs.get(runId)?.abort();
     return runs.has(runId);
   });
-  ipcMain.handle('hermes:approve', async (_e, { runId, requestId, generation, choice }) => {
+  ipcMain.handle('hermes:approve', async (_e, { iid, runId, requestId, generation, choice }) => {
     if (!['once', 'session', 'always', 'deny'].includes(choice)) throw new Error('Pick Allow or Deny.');
     const body = { choice, ...(requestId != null ? { request_id: String(requestId).slice(0, 200) } : {}), ...(Number.isInteger(generation) ? { execution_generation: generation } : {}) };
-    await call(current(), 'POST', `/v1/runs/${encodeURIComponent(runId)}/approval`, body);
+    // An approval goes to the instance whose turn asked for it.
+    await call(pick(iid), 'POST', `/v1/runs/${encodeURIComponent(runId)}/approval`, body);
     return { choice };
   });
 }
 
-module.exports = { register, current };
+module.exports = { register, current, serveMedia };

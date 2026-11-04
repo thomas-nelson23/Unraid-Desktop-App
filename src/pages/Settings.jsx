@@ -1,4 +1,3 @@
-import { ComfySetup } from './ai/Studio.jsx';
 import { useEffect, useState } from 'react';
 import { desktop, usePoll } from '../lib/api.js';
 import { ago } from '../lib/format.js';
@@ -240,16 +239,19 @@ function HermesInstances({ hermesList, onChanged, live }) {
         <h3 className="h4">Hermes instances</h3>
         <span className="eyebrow">{rows.length === 1 ? '1 instance' : `${rows.length} instances`}</span>
       </div>
-      <p className="soft">Each Hermes Agent container, with the address of its API server and its key. The AI page switches between them.</p>
+      <p className="soft">Each Hermes Agent container or profile, with the address of its API server and its key. A named profile on a shared API server is reached under <span className="mono">/p/&lt;profile&gt;/</span> with that profile's own key; a profile with its own gateway just has its own port. Chats, featured chats and the Studio can each run on a different one.</p>
       <form className="form" onSubmit={submit}>
         {rows.map((h, i) => (
           <div className="inst" key={h.id}>
-            <div className="fields three">
+            <div className="fields four">
             <Field label="Name">
               <input value={h.name} onChange={(e) => edit(i, { name: e.target.value })} placeholder="Hermes on Cubecrusher" />
             </Field>
             <Field label="API address">
               <input value={h.url} onChange={(e) => edit(i, { url: e.target.value })} placeholder="http://192.168.1.10:8642/v1" spellCheck={false} />
+            </Field>
+            <Field label="Profile (optional)">
+              <input value={h.profile ?? ''} onChange={(e) => edit(i, { profile: e.target.value })} placeholder="default" spellCheck={false} title="A named Hermes profile on a shared API server is reached under /p/<profile>/, with that profile's own key." />
             </Field>
             <Field label={h.hasKey && h.key === undefined ? 'API key (saved)' : 'API key'}>
               <input type="password" value={h.key ?? ''} onChange={(e) => edit(i, { key: e.target.value })} placeholder={h.hasKey ? 'Leave empty to keep it' : 'Optional'} autoComplete="off" />
@@ -539,7 +541,6 @@ export default function Settings({ conn, onConnect, onChanged, hermesList, onHer
             />
           )}
           <HermesInstances hermesList={hermesList} onChanged={onHermesChanged} live={dash.state === 'live'} />
-          <ComfySetup />
           <DockerServers />
           {settings && updater && <Updates updater={updater} />}
         </>

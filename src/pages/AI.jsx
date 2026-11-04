@@ -62,7 +62,7 @@ function Models({ instance }) {
     let alive = true;
     setState({ data: null, error: null });
     desktop.hermes
-      .models()
+      .models(instance.id)
       .then((data) => alive && setState({ data, error: null }))
       .catch((err) => alive && setState({ data: null, error: err.message }));
     return () => {
@@ -120,7 +120,7 @@ function Tools({ instance }) {
     if (!desktop?.hermes?.skills || !instance) return;
     setState(null);
     desktop.hermes
-      .skills()
+      .skills(instance.id)
       .then(setState)
       .catch((err) => setState({ skills: [], toolsets: [], error: err.message }));
   }, [instance?.id]);
@@ -210,9 +210,9 @@ function Switcher({ instances, current, status, onSwitch, onManage }) {
 export default function AI({ tab, onTab, draft, onDraftUsed, hermesList, onSwitch, onPage, context }) {
   const label = TABS.find((t) => t.id === tab)?.label;
   const instance = hermesList.instances.find((h) => h.id === hermesList.current) || null;
-  const common = { instance, instances: hermesList.instances, onSwitch };
+  const common = { instances: hermesList.instances, defaultIid: hermesList.current };
   let body;
-  if (tab === 'chat') body = <Chat {...common} draft={draft} onDraftUsed={onDraftUsed} context={context} />;
+  if (tab === 'chat') body = hermesList.instances.length ? <Chat {...common} draft={draft} onDraftUsed={onDraftUsed} context={context} /> : <Notice what="Chat" text="Add a Hermes instance under Settings to start chatting." />;
   else if (tab === 'agents') body = <Agents />;
   else if (tab === 'models') body = <Models instance={instance} />;
   else if (tab === 'tools') body = <Tools instance={instance} />;
@@ -221,11 +221,11 @@ export default function AI({ tab, onTab, draft, onDraftUsed, hermesList, onSwitc
     <div className="hermes-page">
       <div className="ph">
         <div>
-          <span className="eyebrow c">AI{instance && tab !== 'agents' ? ` · ${instance.name}` : ''}</span>
+          <span className="eyebrow c">AI{instance && (tab === 'models' || tab === 'tools') ? ` · ${instance.name}` : ''}</span>
           <h1>{label}</h1>
         </div>
         <div className="chips">
-          {tab !== 'agents' && <Switcher instances={hermesList.instances} current={instance} status={hermesList.status} onSwitch={onSwitch} onManage={() => onPage('settings')} />}
+          {(tab === 'models' || tab === 'tools') && <Switcher instances={hermesList.instances} current={instance} status={hermesList.status} onSwitch={onSwitch} onManage={() => onPage('settings')} />}
         </div>
       </div>
       <nav className="tabs" aria-label="AI views">
@@ -250,7 +250,7 @@ function StudioKeeper({ show, common }) {
   if (!opened) return null;
   return (
     <div hidden={!show}>
-      <Studio {...common} visible={show} />
+      {common.instances.length ? <Studio {...common} /> : <Notice what="Studio" text="Add a Hermes instance under Settings to use the Studio." />}
     </div>
   );
 }
