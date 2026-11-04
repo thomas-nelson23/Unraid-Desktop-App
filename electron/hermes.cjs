@@ -1,6 +1,6 @@
 const { net } = require('electron');
 const settings = require('./settings.cjs');
-const { parseEvents, toChatEvent, toSession, toSessionDetail, toTranscript, toModelOptions, cleanUrl } = require('./hermesShape.cjs');
+const { parseEvents, toChatEvent, toSession, toSessionDetail, toTranscript, toModelOptions, cleanUrl, modelFrom, isPage, isLoginWall, DASHBOARD_HINT } = require('./hermesShape.cjs');
 
 // Talks to Hermes Agent's API server directly, for each Hermes instance
 // Thomas has set up. Hermes's own API sits beside its OpenAI-style /v1.
@@ -139,13 +139,12 @@ async function test({ url: rawUrl, key, id }) {
   } catch (err) {
     throw new Error(`Can't reach ${url} (${err.cause?.code || err.message}).`);
   }
-  const text = (await res.text().catch(() => '')).slice(0, 200);
-  if (res.status === 401 || res.status === 403) throw new Error(`Hermes refused the key (${res.status})${useKey ? '' : ', and no key was sent'}. It answered: ${text || '(nothing)'}`);
-  if (!res.ok) throw new Error(`Hermes answered ${res.status}: ${text || '(nothing)'}`);
-  let model = null;
-  try {
-    model = JSON.parse(text).data?.[0]?.id || null;
-  } catch {}
+  const text = (await res.text().catch(() => '')).slice(0, 2000);
+  if (res.status === 401 || res.status === 403) throw new Error(`Hermes refused the key (${res.status})${useKey ? '' : ', and no key was sent'}. It answered: ${text.slice(0, 200) || '(nothing)'}`);
+  if (!res.ok) throw new Error(`Hermes answered ${res.status}: ${text.slice(0, 200) || '(nothing)'}`);
+  // The web dashboard answers any path with its page, which isn't an answer.
+  if (isPage(text)) throw new Error(DASHBOARD_HINT);
+  const model = modelFrom(text);
   // /v1/models may answer without checking the key; the sessions API, which
   // the chat uses, does check it.
   let sessions;
@@ -156,6 +155,7 @@ async function test({ url: rawUrl, key, id }) {
   }
   if (sessions.status === 401 || sessions.status === 403) {
     const said = (await sessions.text().catch(() => '')).slice(0, 200);
+    if (isLoginWall(said)) throw new Error(DASHBOARD_HINT);
     throw new Error(`Models answered, but the sessions API refused the key (${sessions.status})${useKey ? '' : ' and no key was sent'}. It said: ${said || '(nothing)'}. The key has to be this container's API_SERVER_KEY.`);
   }
   if (sessions.status === 404) throw new Error("Models answered, but this Hermes has no sessions API. Update the Hermes Agent container.");
