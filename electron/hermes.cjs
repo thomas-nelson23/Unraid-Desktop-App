@@ -1,6 +1,6 @@
 const { net } = require('electron');
 const settings = require('./settings.cjs');
-const { parseEvents, toChatEvent, toSession, toSessionDetail, toTranscript, toModelOptions, cleanUrl, modelFrom, isPage, isLoginWall, DASHBOARD_HINT } = require('./hermesShape.cjs');
+const { parseEvents, withImages, cleanImages, toChatEvent, toSession, toSessionDetail, toTranscript, toModelOptions, cleanUrl, modelFrom, isPage, isLoginWall, DASHBOARD_HINT } = require('./hermesShape.cjs');
 
 // Talks to Hermes Agent's API server directly, for each Hermes instance
 // Thomas has set up. Hermes's own API sits beside its OpenAI-style /v1.
@@ -101,12 +101,12 @@ const runs = new Map();
 
 // Runs one turn: events go to the window as they arrive, and the promise
 // settles when Hermes is done.
-async function chat(win, h, id, message, runId) {
+async function chat(win, h, id, body, runId) {
   const control = new AbortController();
   runs.set(runId, control);
   const send = (event) => !win.isDestroyed() && win.webContents.send('hermes:event', { runId, ...event });
   try {
-    const res = await call(h, 'POST', `/api/sessions/${encodeURIComponent(id)}/chat/stream`, { message }, control.signal);
+    const res = await call(h, 'POST', `/api/sessions/${encodeURIComponent(id)}/chat/stream`, body, control.signal);
     const decoder = new TextDecoder();
     let buffer = '';
     for await (const chunk of res.body) {
@@ -164,6 +164,15 @@ async function test({ url: rawUrl, key, id }) {
   return { ok: true, model, sentKey: Boolean(useKey), sessions: count };
 }
 
+// A list from /v1/skills or /v1/toolsets, whatever shape it comes in, as
+// { name, description } rows.
+function toNamed(json) {
+  const list = Array.isArray(json) ? json : json?.data || json?.skills || json?.toolsets || [];
+  return (Array.isArray(list) ? list : [])
+    .map((x) => (typeof x === 'string' ? { name: x, description: '' } : { name: String(x?.name || x?.id || ''), description: String(x?.description || '').slice(0, 300), tools: Array.isArray(x?.tools) ? x.tools.length : null }))
+    .filter((x) => x.name);
+}
+
 function register(ipcMain, getWindow) {
   ipcMain.handle('hermes:list', () => list());
   ipcMain.handle('hermes:test', (_e, raw) => test(raw || {}));
@@ -185,11 +194,35 @@ function register(ipcMain, getWindow) {
     await call(current(), 'DELETE', `/api/sessions/${encodeURIComponent(id)}`);
   });
   ipcMain.handle('hermes:models', async () => toModelOptions(await (await call(current(), 'GET', '/api/model/options?include_unconfigured=false', null, AbortSignal.timeout(30_000))).json()));
-  ipcMain.handle('hermes:chat', (_e, { id, message }) => {
-    if (typeof message !== 'string' || !message.trim()) throw new Error('Type a message first.');
+  // A turn, optionally on another model (Hermes takes model and provider per
+  // request) and with pictures, sent as image parts beside the text.
+  ipcMain.handle('hermes:chat', (_e, { id, message, model, provider, images }) => {
+    const pics = cleanImages(images);
+    if (typeof message !== 'string' || (!message.trim() && !pics.length)) throw new Error('Type a message first.');
+    if (message.length > 200_000) throw new Error('That message is too long.');
+    const body = { message: withImages(message, pics) };
+    if (typeof model === 'string' && model.trim()) body.model = model.trim().slice(0, 200);
+    if (typeof provider === 'string' && provider.trim()) body.provider = provider.trim().slice(0, 100);
     const runId = settings.newId();
-    chat(getWindow(), current(), id, message, runId);
+    chat(getWindow(), current(), id, body, runId);
     return runId;
+  });
+  ipcMain.handle('hermes:rename', async (_e, { id, title }) => {
+    const t = typeof title === 'string' ? title.trim().slice(0, 200) : '';
+    if (!t) throw new Error('Give the chat a name.');
+    return toSession((await (await call(current(), 'PATCH', `/api/sessions/${encodeURIComponent(id)}`, { title: t })).json()).session || { id, title: t });
+  });
+  // What Hermes can do: its skills and toolsets, read only.
+  ipcMain.handle('hermes:skills', async () => {
+    const get = async (p) => {
+      try {
+        return await (await call(current(), 'GET', p)).json();
+      } catch (err) {
+        return { error: err.message };
+      }
+    };
+    const [skills, toolsets] = await Promise.all([get('/v1/skills'), get('/v1/toolsets')]);
+    return { skills: toNamed(skills), toolsets: toNamed(toolsets), error: skills.error && toolsets.error ? skills.error : null };
   });
   ipcMain.handle('hermes:stop', (_e, runId) => {
     runs.get(runId)?.abort();

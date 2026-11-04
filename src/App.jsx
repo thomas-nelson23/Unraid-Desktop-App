@@ -3,7 +3,7 @@ import Sidebar from './Sidebar.jsx';
 import TopBar from './TopBar.jsx';
 import ConnectDialog from './ConnectDialog.jsx';
 import Home from './pages/Home.jsx';
-import Hermes from './pages/Hermes.jsx';
+import AI from './pages/AI.jsx';
 import Docker from './pages/Docker.jsx';
 import Overview from './pages/Overview.jsx';
 import Settings from './pages/Settings.jsx';
@@ -45,7 +45,7 @@ export default function App() {
   const [conn, setConn] = useState({ state: 'demo', reason: 'none' });
   const [connecting, setConnecting] = useState(false);
   const [page, setPage] = useState('home');
-  const [hermesTab, setHermesTab] = useState('agents');
+  const [hermesTab, setHermesTab] = useState('chat');
   const [draft, setDraft] = useState('');
   const hermes = useHermesList();
   const updater = useUpdates();
@@ -83,7 +83,7 @@ export default function App() {
     docker: live ? (containers?.length ?? null) : demoContainerCount,
   };
 
-  // "Ask Hermes" from anywhere lands in the Hermes chat with the question filled in.
+  // "Ask Hermes" from anywhere lands in the AI page's chat with the question filled in.
   const askHermes = (text) => {
     setDraft(text);
     setHermesTab('chat');
@@ -93,7 +93,7 @@ export default function App() {
 
   let content;
   if (page === 'home') content = <Home conn={conn} needs={needs} onAsk={askHermes} onPage={setPage} />;
-  else if (page === 'hermes') content = <Hermes tab={hermesTab} onTab={setHermesTab} draft={draft} onDraftUsed={onDraftUsed} hermesList={hermes.list} onSwitch={hermes.switchTo} onPage={setPage} />;
+  else if (page === 'hermes') content = <AI tab={hermesTab} onTab={setHermesTab} draft={draft} onDraftUsed={onDraftUsed} hermesList={hermes.list} onSwitch={hermes.switchTo} onPage={setPage} context={{ host: server?.host, containers, needs: live ? needs : [] }} />;
   // Array & disks is a tab of Overview; its page id opens that tab.
   else if (page === 'overview' || page === 'array') content = <Overview conn={conn} server={server} history={history} tab={page} onTab={setPage} onAsk={askHermes} />;
   else if (page === 'docker') content = <Docker conn={conn} onPage={setPage} />;
