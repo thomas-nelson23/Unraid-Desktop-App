@@ -1,15 +1,12 @@
 name: Build
 
-# Builds the app for each platform on every push. The installers are
-# attached to the run as downloadable artifacts, which the in-app updater
-# fetches: one zip for an Apple Silicon Mac, the Windows installer, the
-# AppImage, plus the pacman package for CachyOS.
-#
-# The repository is private, so artifacts count against GitHub's storage
-# quota (500 MB on the free plan). A cleanup job therefore runs first and
-# drops every artifact except the newest run's on each branch that still
-# exists; a push also replaces its own branch's artifacts, keeps them a
-# week, and skips the big disk images and the Intel Mac zip unless asked for.
+# Builds the app for each platform on every push and publishes the
+# installers as a GitHub Release, which the in-app updater reads: a zip for
+# an Apple Silicon Mac, the Windows installer, the AppImage and the pacman
+# package for CachyOS. The repository is public, so the app fetches them
+# with no token. A push to main is a normal release; any other branch is a
+# pre-release, so the app's branch picker can try it. Only the newest few
+# releases per branch are kept, and none for a branch that is gone.
 on:
   push:
   workflow_dispatch:
@@ -20,41 +17,10 @@ on:
         default: false
 
 permissions:
-  contents: read
-  actions: write
+  contents: write
 
 jobs:
-  # Deletes stale artifacts: everything from branches that are gone, and all
-  # but the newest run's on every other branch. Without this, every push on
-  # every thread branch would sit in storage for 90 days.
-  cleanup:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/github-script@v7
-        with:
-          script: |
-            const { owner, repo } = context.repo;
-            const branches = new Set((await github.paginate(github.rest.repos.listBranches, { owner, repo, per_page: 100 })).map((b) => b.name));
-            const artifacts = (await github.paginate(github.rest.actions.listArtifactsForRepo, { owner, repo, per_page: 100 })).filter((a) => !a.expired);
-            const newest = {};
-            for (const a of artifacts) {
-              const b = a.workflow_run?.head_branch;
-              if (b && branches.has(b) && b !== process.env.GITHUB_REF_NAME) newest[b] = Math.max(newest[b] || 0, a.workflow_run.id);
-            }
-            let freed = 0;
-            for (const a of artifacts) {
-              const b = a.workflow_run?.head_branch;
-              const id = a.workflow_run?.id;
-              if (id === context.runId) continue;
-              if (b && branches.has(b) && b !== process.env.GITHUB_REF_NAME && id === newest[b]) continue;
-              await github.rest.actions.deleteArtifact({ owner, repo, artifact_id: a.id });
-              freed += a.size_in_bytes;
-              core.info(`Deleted ${a.name} (${b || 'no branch'}, run ${id}, ${Math.round(a.size_in_bytes / 1e6)} MB)`);
-            }
-            core.notice(`Freed ${Math.round(freed / 1e6)} MB of old build artifacts.`);
-
   build:
-    needs: cleanup
     strategy:
       fail-fast: false
       matrix:
@@ -87,8 +53,9 @@ jobs:
         run: npm run dist:${{ matrix.target }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
-
-      # Mac: the updater takes the zip for its chip; the disk images are for a first install.
+      # Handed to the release job below, which is what keeps them. The names
+      # are the ones the updater in builds before November 2026 looked for,
+      # so an app that old can still update itself to a build from here.
       - uses: actions/upload-artifact@v4
         if: matrix.target == 'mac'
         with:
@@ -110,7 +77,6 @@ jobs:
           path: release/*.dmg
           if-no-files-found: error
           retention-days: 7
-
       - uses: actions/upload-artifact@v4
         if: matrix.target == 'win'
         with:
@@ -118,8 +84,6 @@ jobs:
           path: release/*.exe
           if-no-files-found: error
           retention-days: 7
-
-      # Linux: the updater replaces the AppImage; the pacman package is for CachyOS.
       - uses: actions/upload-artifact@v4
         if: matrix.target == 'linux'
         with:
@@ -134,3 +98,45 @@ jobs:
           path: release/*.pacman
           if-no-files-found: error
           retention-days: 7
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: installers
+          merge-multiple: true
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          tag="builds/${GITHUB_REF_NAME}/${GITHUB_RUN_NUMBER}"
+          title="${GITHUB_REF_NAME} @ ${GITHUB_SHA::7}"
+          notes="$(git log -1 --pretty=%B "$GITHUB_SHA")"
+          flags=()
+          [ "$GITHUB_REF_NAME" = main ] || flags+=(--prerelease)
+          ls -la installers
+          gh release create "$tag" installers/* --target "$GITHUB_SHA" --title "$title" --notes "$notes" "${flags[@]}"
+      # Keeps the newest three builds per branch, and none for a branch that's gone.
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const KEEP = 3;
+            const branches = new Set((await github.paginate(github.rest.repos.listBranches, { owner, repo, per_page: 100 })).map((b) => b.name));
+            const releases = (await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 }))
+              .map((r) => ({ r, m: /^builds\/(.+)\/(\d+)$/.exec(r.tag_name) }))
+              .filter((x) => x.m)
+              .sort((a, b) => Number(b.m[2]) - Number(a.m[2]));
+            const seen = {};
+            for (const { r, m } of releases) {
+              const branch = m[1];
+              seen[branch] = (seen[branch] || 0) + 1;
+              if (branches.has(branch) && seen[branch] <= KEEP) continue;
+              await github.rest.repos.deleteRelease({ owner, repo, release_id: r.id });
+              await github.rest.git.deleteRef({ owner, repo, ref: `tags/${r.tag_name}` }).catch(() => {});
+              core.info(`Deleted ${r.tag_name} (${branches.has(branch) ? 'old' : 'branch is gone'})`);
+            }

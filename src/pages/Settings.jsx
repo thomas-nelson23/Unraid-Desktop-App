@@ -368,29 +368,30 @@ function DockerServers() {
   );
 }
 
-// Pick a branch and install its latest GitHub Actions build.
-function Updates({ github, onToken }) {
-  const [token, setToken] = useState('');
+// Which build is running, and any branch's latest build a click away. The
+// app's own branch is checked on its own; this card also lets another
+// branch's build be tried.
+function Updates({ updater }) {
+  const { running, available, progress, error, note, install, cancel } = updater;
   const [branches, setBranches] = useState(null);
-  const [branch, setBranch] = useState(BUILD.branch);
+  const [branch, setBranch] = useState(running?.branch || BUILD.branch);
   const [latest, setLatest] = useState(null);
-  const [error, setError] = useState(null);
-  const [progress, setProgress] = useState(null);
+  const [loadError, setLoadError] = useState(null);
 
-  const loadBranches = async () => {
-    setError(null);
+  const loadBranches = async (fresh) => {
+    setLoadError(null);
     try {
-      const list = await desktop.updates.branches();
+      const list = await desktop.updates.branches(fresh);
       setBranches(list);
-      if (!list.includes(branch)) setBranch(list[0] || '');
+      if (!list.includes(branch)) setBranch(list.includes(running?.branch) ? running.branch : list[0] || '');
     } catch (err) {
-      setError(err.message);
+      setLoadError(err.message);
     }
   };
   useEffect(() => {
-    if (github.hasToken) loadBranches();
+    loadBranches(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [github.hasToken]);
+  }, []);
   useEffect(() => {
     if (!branch || !branches) return undefined;
     let alive = true;
@@ -398,98 +399,67 @@ function Updates({ github, onToken }) {
     desktop.updates
       .latest(branch)
       .then((l) => alive && setLatest(l))
-      .catch((err) => alive && setError(err.message));
+      .catch((err) => alive && setLoadError(err.message));
     return () => {
       alive = false;
     };
   }, [branch, branches]);
-  useEffect(() => desktop.updates.onProgress(setProgress), []);
-  // Back on this page while an update started earlier is still running.
-  useEffect(() => {
-    desktop.updates.busy().then((busy) => busy && setProgress((p) => p || { text: 'An update is still running…', pct: null })).catch(() => {});
-  }, []);
 
-  const saveToken = async (e) => {
-    e.preventDefault();
-    onToken(await desktop.updates.setToken(token));
-    setToken('');
-  };
-  const install = async () => {
-    setError(null);
-    setProgress({ text: 'Starting…', pct: null });
-    try {
-      const out = await desktop.updates.install(branch);
-      setProgress({ text: out.note || 'Installed. Restarting…', pct: null });
-    } catch (err) {
-      setProgress(null);
-      setError(err.message);
-    }
-  };
-  const cancel = () => desktop.updates.cancel().catch(() => {});
-  const same = latest?.run?.sha && BUILD.sha && latest.run.sha === BUILD.sha;
+  const sha = running?.sha || BUILD.sha;
+  const same = latest?.run?.sha && sha && latest.run.sha === sha;
   const size = latest?.run?.size ? ` (${Math.round(latest.run.size / 1e6)} MB)` : '';
+  const shown = error || loadError;
 
   return (
     <section className="card settings-card">
       <div className="card-head">
         <h3 className="h4">Updates</h3>
         <span className="eyebrow mono">
-          Running {BUILD.branch} @ {BUILD.sha.slice(0, 7) || 'dev'}
+          Running {running?.branch || BUILD.branch} @ {sha.slice(0, 7) || 'dev'}
         </span>
       </div>
       <p className="soft">
-        Every push builds the app on GitHub. Pick a branch to try its latest build; the app replaces itself and restarts. GitHub only hands builds to a signed-in user, so a personal access token with access to the repository is needed once.
+        Every push to GitHub becomes a build. The app checks its own branch when it starts and every hour, and offers a newer build in the top bar; one click installs it and restarts. Pick another branch here to try its build.
       </p>
-      {!github.hasToken || token ? (
-        <form className="form" onSubmit={saveToken}>
-          <Field label={`GitHub token for ${github.owner}/${github.repo}`}>
-            <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="github_pat_…" autoComplete="off" />
-          </Field>
-          <div className="row-end">
-            <button className="btn md primary" disabled={!token.trim()}>
-              Save token
-            </button>
-          </div>
-        </form>
-      ) : (
-        <div className="form">
-          <div className="two">
-            <Field label="Branch">
-              <select value={branch} onChange={(e) => setBranch(e.target.value)} disabled={!branches}>
-                {(branches || [branch]).map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Latest build">
-              <span className="small mono" style={{ height: 36, display: 'flex', alignItems: 'center' }}>
-                {!latest ? 'Checking…' : !latest.run ? (latest.building ? 'Building now…' : 'No finished build yet') : `${latest.run.sha.slice(0, 7)} · ${ago(Date.parse(latest.run.at))} · ${latest.run.conclusion}`}
-              </span>
-            </Field>
-          </div>
-          {latest?.run && <p className="soft small">{latest.run.title}</p>}
-          {latest?.newer && (
-            <p className="err small">
-              The newest push ({latest.newer.sha.slice(0, 7)}, {ago(Date.parse(latest.newer.at))}) has no installer: its build {latest.newer.conclusion === 'success' ? "didn't upload one" : latest.newer.conclusion}. {latest.run ? 'Showing the last one that did.' : ''}
-              {latest.building ? ' Another build is running now.' : ''}
-            </p>
-          )}
-          <div className="row-end">
-            <button type="button" className="btn md quiet" onClick={() => setToken(' ')}>
-              Change token
-            </button>
-            <button type="button" className="btn md quiet" onClick={loadBranches}>
-              Refresh
-            </button>
-            <button type="button" className="btn md primary" onClick={install} disabled={!latest?.run?.ready || Boolean(progress)}>
-              {same ? 'Reinstall this build' : 'Download and install'}
-              {size}
-            </button>
-          </div>
-        </div>
+      {available && !progress && (
+        <p className="ok small">
+          A newer build is ready: {available.title}. <button type="button" className="linkish" onClick={() => install(available.branch)}>Install it and restart</button>
+        </p>
       )}
+      <div className="form">
+        <div className="two">
+          <Field label="Branch">
+            <select value={branch} onChange={(e) => setBranch(e.target.value)} disabled={!branches}>
+              {(branches || [branch]).map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Latest build">
+            <span className="small mono" style={{ height: 36, display: 'flex', alignItems: 'center' }}>
+              {!latest ? 'Checking…' : !latest.run ? (latest.building ? 'Building now…' : 'No finished build yet') : `${latest.run.sha.slice(0, 7)} · ${ago(Date.parse(latest.run.at))}${same ? ' · running now' : ''}`}
+            </span>
+          </Field>
+        </div>
+        {latest?.run?.notes && <p className="soft small">{latest.run.notes.split('\n')[0]}</p>}
+        {latest?.newer && (
+          <p className="err small">
+            The newest push ({latest.newer.sha.slice(0, 7)}, {ago(Date.parse(latest.newer.at))}) has no installer for this computer. {latest.run ? 'Showing the last one that does.' : ''}
+            {latest.building ? ' Another build is running now.' : ''}
+          </p>
+        )}
+        <div className="row-end">
+          <button type="button" className="btn md quiet" onClick={() => loadBranches(true)}>
+            Check now
+          </button>
+          <button type="button" className="btn md primary" onClick={() => install(branch)} disabled={!latest?.run?.ready || Boolean(progress)}>
+            {same ? 'Reinstall this build' : 'Download and install'}
+            {size}
+          </button>
+        </div>
+      </div>
       {progress && (
         <div className="progress">
           <p className="ok">{progress.text}</p>
@@ -503,12 +473,13 @@ function Updates({ github, onToken }) {
           </button>
         </div>
       )}
-      {error && <p className="err">{error}</p>}
+      {note && <p className="ok">{note}</p>}
+      {shown && <p className="err">{shown}</p>}
     </section>
   );
 }
 
-export default function Settings({ conn, onConnect, onChanged, hermesList, onHermesChanged }) {
+export default function Settings({ conn, onConnect, onChanged, hermesList, onHermesChanged, updater }) {
   const [settings, setSettings] = useState(null);
   useEffect(() => {
     if (desktop) window.cubecrusher.getSettings().then(setSettings);
@@ -568,7 +539,7 @@ export default function Settings({ conn, onConnect, onChanged, hermesList, onHer
           )}
           <HermesInstances hermesList={hermesList} onChanged={onHermesChanged} live={dash.state === 'live'} />
           <DockerServers />
-          {settings && <Updates github={settings.github} onToken={(github) => setSettings((s) => ({ ...s, github }))} />}
+          {settings && updater && <Updates updater={updater} />}
         </>
       ) : (
         <p className="dim">Hermes instances, Docker servers and updates are set up in the desktop app.</p>

@@ -1420,3 +1420,10 @@ button {
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
+
+/* The top bar's update pill: a newer build is one click away. */
+.lcd.update { position: relative; overflow: hidden; cursor: pointer; color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 50%, transparent); }
+.lcd.update:hover { background: color-mix(in srgb, var(--cyan) 12%, var(--ink-6)); }
+.lcd.update.busy { cursor: default; }
+.lcd.update i { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--cyan); transition: width 0.3s; }
+.lcd.update.failed { color: var(--red); border-color: color-mix(in srgb, var(--red) 50%, transparent); }

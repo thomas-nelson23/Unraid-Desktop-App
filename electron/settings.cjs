@@ -5,7 +5,7 @@ const path = require('node:path');
 // Everything the app remembers about this computer's setup, in the user's
 // config folder so it survives updates: Cubecrusher's Unraid API, the
 // optional dashboard server, the Hermes instances, the Docker servers, the
-// weather place and the GitHub token for updates.
+// weather place and which GitHub repository the updates come from.
 const DEFAULTS = {
   unraid: { url: process.env.UNRAID_URL || '', apiKey: process.env.UNRAID_API_KEY || '', insecure: false, sshUser: 'root', sshPort: 22 },
   weather: null,
@@ -13,7 +13,7 @@ const DEFAULTS = {
   hermes: [],
   hermesCurrent: null,
   servers: [],
-  github: { token: '', owner: 'thomas-nelson23', repo: 'unraid-desktop-app' },
+  github: { owner: 'thomas-nelson23', repo: 'unraid-desktop-app' },
 };
 
 let settings = structuredClone(DEFAULTS);
@@ -47,7 +47,7 @@ async function update(next) {
   return settings;
 }
 
-// What the page may see: never a key or token, only whether one is set.
+// What the page may see: never a key, only whether one is set.
 function forPage() {
   const { apiKey, ...unraid } = settings.unraid;
   return {
@@ -57,7 +57,7 @@ function forPage() {
     hermes: settings.hermes.map(({ key, ...h }) => ({ ...h, hasKey: Boolean(key) })),
     hermesCurrent: settings.hermesCurrent,
     servers: settings.servers,
-    github: { owner: settings.github.owner, repo: settings.github.repo, hasToken: Boolean(settings.github.token) },
+    github: { owner: settings.github.owner, repo: settings.github.repo },
   };
 }
 

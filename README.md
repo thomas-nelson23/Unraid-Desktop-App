@@ -88,12 +88,12 @@ npm test
   Home-Dashboard, so the sign-in cookie lives in Electron's cookie jar and
   there are no CORS problems; `hermes.cjs` talks to Hermes Agent's API;
   `docker.cjs` picks the Unraid API or SSH per server; `weather.cjs` asks
-  Open-Meteo; `updates.cjs` fetches builds from GitHub Actions. The workflow
-  uploads one artifact per platform (`cubecrusher-mac-arm64`,
-  `cubecrusher-win`, `cubecrusher-linux` for the AppImage,
-  `cubecrusher-linux-pacman`, about 100 MB each) and the updater picks the
-  one for this computer; the download shows its progress, can be cancelled,
-  and gives up if nothing arrives for a minute.
+  Open-Meteo; `updates.cjs` fetches builds from GitHub Releases. The
+  workflow publishes every push as a release tagged `builds/<branch>/<run>`
+  with one asset per installer, and the updater picks the one for this
+  computer (`updatesShape.cjs`); it checks the app's own branch at startup
+  and hourly, and the download shows its progress, can be cancelled, and
+  gives up if nothing arrives for a minute.
 - `electron/preload.cjs` gives the page a small `window.cubecrusher` bridge.
 - The VMs page's screens are WebSockets from the page to the server. The
   main process adds the sign-in cookie and the Origin the server checks to
@@ -103,39 +103,37 @@ npm test
 
 ## Installers
 
-Every push to `main` builds the app for all three platforms on GitHub
-Actions; open the newest green run under **Actions** and download the
-installer for your computer from its **Artifacts** (each one is a zip around
-the installer). The repository is public, so artifacts don't count against
-GitHub's storage quota; a signed-in GitHub account is still needed to
-download them, and the in-app updater uses the token from Settings.
+Every push builds the app for all three platforms on GitHub Actions and
+publishes the installers as a release: the newest build of `main` is the
+**Latest** release on the [Releases page](https://github.com/thomas-nelson23/Unraid-Desktop-App/releases),
+and other branches are pre-releases. The repository is public, so the
+downloads need no account.
 
-On CachyOS or any Arch-based distro, download `cubecrusher-linux-pacman`
-and install it with pacman:
+**Updating is one click.** The app checks its own branch when it starts and
+every hour; when a newer build is out, an **Update ready** button appears
+in the top bar. Clicking it downloads the installer, replaces the app and
+restarts it: the Mac app is swapped in place, an AppImage is overwritten,
+a pacman install is upgraded with the new package (the system asks for
+your password), and on Windows the installer runs quietly and starts the
+app again. Settings → Updates shows the build that's running and lets any
+branch's build be installed instead.
+
+On CachyOS or any Arch-based distro, install the `.pacman` package once:
 
 ```sh
-cd ~/Downloads
-bsdtar -xf cubecrusher-linux-pacman.zip
-sudo pacman -U cubecrusher-desktop-*.pacman
+curl -LO https://github.com/thomas-nelson23/Unraid-Desktop-App/releases/latest/download/cubecrusher-desktop-0.1.0.pacman
+sudo pacman -U cubecrusher-desktop-0.1.0.pacman
 ```
 
-With the GitHub CLI signed in (`gh auth login`), the download is one line:
-
-```sh
-gh run download -R thomas-nelson23/Unraid-Desktop-App -n cubecrusher-linux-pacman -D ~/Downloads
-```
-
-It shows up in the app menu as Cubecrusher (binary `cubecrusher`), and the
-same `pacman -U` on a newer package upgrades it. The AppImage runs anywhere:
-`chmod +x` it and double-click; it needs `fuse2` (`sudo pacman -S fuse2`),
-or run it with `--appimage-extract-and-run`. The in-app updater replaces an
-AppImage in place; for a pacman install it opens the folder with the new
-package.
+It shows up in the app menu as Cubecrusher (binary `cubecrusher`), and
+updates itself from then on. The AppImage runs anywhere: `chmod +x` it and
+double-click; it needs `fuse2` (`sudo pacman -S fuse2`), or run it with
+`--appimage-extract-and-run`.
 
 `npm run dist:mac`, `dist:win` or `dist:linux` builds an installer into
 `release/` by hand. The Mac build on Actions is the Apple Silicon zip only;
-run the workflow by hand with the "Also build the Mac disk images" box ticked for the Intel build and
-disk images.
+run the workflow by hand with the "Also build the Mac disk images" box
+ticked for the Intel build and disk images.
 
 The Mac app isn't notarized by Apple yet, so the first time, right-click it
 and choose **Open**. If macOS says it's damaged, run this once in Terminal:
