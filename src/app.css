@@ -1447,7 +1447,7 @@ button {
   max-height: calc(100vh - 520px);
   min-height: 120px;
 }
-.inst {
+.inst-tabs {
   display: flex;
   gap: 2px;
   padding: 2px;
@@ -1455,7 +1455,7 @@ button {
   border: 1px solid var(--hair);
   border-radius: 2px;
 }
-.inst button {
+.inst-tabs button {
   flex: 1;
   min-width: 0;
   height: 24px;
@@ -1472,10 +1472,10 @@ button {
   white-space: nowrap;
   cursor: pointer;
 }
-.inst button:hover {
+.inst-tabs button:hover {
   color: var(--text-bright);
 }
-.inst button.checked {
+.inst-tabs button.checked {
   background: var(--cyan-12);
   color: var(--cyan);
 }
@@ -1880,4 +1880,141 @@ button {
 .kv-list div {
   display: grid;
   gap: 2px;
+}
+
+/* Media Hermes hands back */
+.media-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.inline-pic {
+  max-width: 240px;
+  max-height: 240px;
+  border-radius: 2px;
+  border: 1px solid var(--hair);
+}
+.hmedia {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  max-width: 420px;
+  background: var(--well);
+  border: 1px solid var(--hair);
+  border-radius: 2px;
+}
+.hmedia.image {
+  max-width: 320px;
+}
+.hmedia .pic {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
+.hmedia img,
+.hmedia video {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+  border-radius: 1px;
+  background: #000;
+}
+.hmedia audio {
+  width: 100%;
+  min-width: 260px;
+  height: 36px;
+}
+.hmedia-cap {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+.hmedia-cap .mono {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-soft);
+}
+.hmedia.loading,
+.hmedia.err-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.hmedia.compact {
+  max-width: none;
+  padding: 6px;
+}
+.hmedia.compact img,
+.hmedia.compact video {
+  height: 130px;
+  object-fit: cover;
+}
+.library {
+  display: grid;
+  gap: 8px;
+  overflow-y: auto;
+  max-height: calc(100vh - 420px);
+  align-content: start;
+}
+.library.image,
+.library.video {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.lib-item {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.lib-item > small {
+  font: 10px var(--font-mono);
+  padding-left: 2px;
+}
+.media .only {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.media .inst-tabs button {
+  padding: 0 4px;
+}
+.feat .prof {
+  margin-left: 8px;
+  padding: 1px 5px;
+  border: 1px solid var(--cyan-50);
+  border-radius: 2px;
+  font: 500 9px var(--font-mono);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--cyan);
+  vertical-align: 2px;
+}
+.feat-pick select {
+  margin-top: 4px;
+  height: 26px;
+  background: var(--well);
+  border: 1px solid var(--hair-strong);
+  border-radius: 2px;
+  color: var(--text);
+  font: 12px var(--font-sans);
+}
+.hmedia audio,
+.hmedia video,
+.viewer-box audio {
+  color-scheme: dark;
+}
+.hmedia.image:not(.compact) {
+  max-width: 260px;
+}
+.media .inst-tabs button {
+  flex: 1 1 auto;
+  overflow: visible;
+  text-overflow: clip;
+  letter-spacing: 0.5px;
 }

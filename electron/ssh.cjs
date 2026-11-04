@@ -45,3 +45,51 @@ function withBackoff(fn, { retryAfter = 60_000 } = {}) {
 }
 
 module.exports = { run, docker, withBackoff };
+
+// Like run, but stdout comes back as bytes and `input` (bytes) is fed to the
+// command's stdin: for copying files to and from a server.
+function runBinary(server, args, { input = null, timeout = 120_000, maxBytes = 512 * 1024 * 1024 } = {}) {
+  const { spawn } = require('node:child_process');
+  const sshArgs = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', '-o', 'StrictHostKeyChecking=accept-new', ...CONTROL, '-p', String(server.port || 22), `${server.user || 'root'}@${server.host}`, ...args];
+  return new Promise((resolve, reject) => {
+    let child;
+    try {
+      child = spawn('ssh', sshArgs, { env: process.env });
+    } catch (err) {
+      return reject(err);
+    }
+    const out = [];
+    let size = 0;
+    let err = '';
+    const timer = setTimeout(() => {
+      child.kill();
+      reject(new Error(`${server.name} took too long to answer.`));
+    }, timeout);
+    child.stdout.on('data', (d) => {
+      size += d.length;
+      if (size > maxBytes) {
+        child.kill();
+        return reject(new Error('That file is too big to fetch.'));
+      }
+      out.push(d);
+    });
+    child.stderr.on('data', (d) => {
+      err += d;
+    });
+    child.on('error', (e) => {
+      clearTimeout(timer);
+      reject(e.code === 'ENOENT' ? new Error('The ssh command is not installed on this computer.') : e);
+    });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      if (code === 0) return resolve(Buffer.concat(out));
+      const text = err.trim();
+      if (/Permission denied \(publickey/i.test(text)) return reject(new Error(`${server.name} refused the SSH key. Add this computer's public key to ${server.user || 'root'}@${server.host}.`));
+      reject(new Error(text.split('\n').pop() || `ssh exited with ${code}`));
+    });
+    if (input) child.stdin.end(input);
+    else child.stdin.end();
+  });
+}
+
+module.exports.runBinary = runBinary;

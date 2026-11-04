@@ -1,4 +1,7 @@
-const { app, BrowserWindow, ipcMain, session, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, session, shell, protocol } = require('electron');
+
+// Files fetched from Hermes are shown from the app's cache under cubemedia://.
+protocol.registerSchemesAsPrivileged([{ scheme: 'cubemedia', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
 const path = require('node:path');
 const settings = require('./settings.cjs');
 const dashboard = require('./dashboard.cjs');
@@ -7,7 +10,6 @@ const docker = require('./docker.cjs');
 const unraid = require('./unraid.cjs');
 const weather = require('./weather.cjs');
 const updates = require('./updates.cjs');
-const comfy = require('./comfy.cjs');
 
 let win = null;
 
@@ -32,7 +34,6 @@ docker.register(ipcMain);
 unraid.register(ipcMain);
 weather.register(ipcMain);
 updates.register(ipcMain, () => win);
-comfy.register(ipcMain, () => win);
 
 // The VMs page's screens are WebSockets straight from the page to the server.
 // The page isn't served by the server, so the browser would send neither the
@@ -101,6 +102,7 @@ app.whenReady().then(async () => {
   await settings.load();
   unraid.ready();
   signScreenSockets();
+  hermes.serveMedia(protocol);
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

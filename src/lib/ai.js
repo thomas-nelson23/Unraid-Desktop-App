@@ -203,6 +203,6 @@ export function madeBy(gallery, sends) {
 // What a Studio message tells Hermes about the files that came with it.
 export function filesNote(files) {
   if (!files?.length) return '';
-  const list = files.map((f) => `- ${f.subfolder ? `${f.subfolder}/` : ''}${f.filename} (${f.kind})`).join('\n');
-  return `\n\nFiles for this request, already in ComfyUI's input folder:\n${list}`;
+  const list = files.map((f) => `- ${f.path || f.filename} (${f.kind})`).join('\n');
+  return `\n\nFiles for this request (already on your side, at these paths):\n${list}`;
 }
