@@ -208,6 +208,38 @@ function cleanUrl(input) {
   return `${u.protocol}//${u.host}${p}`;
 }
 
+// What an address answered when asked for /v1/models. Hermes's web
+// dashboard (port 9119) answers any path with its web page, and its
+// sessions API wants a browser login, so either reply means the address is
+// the dashboard rather than the API server on 8642.
+function modelFrom(text) {
+  try {
+    return JSON.parse(text).data?.[0]?.id || null;
+  } catch {
+    return null;
+  }
+}
+function isPage(text) {
+  const t = String(text || '').trim();
+  if (!t) return false;
+  if (/^<!doctype html|^<html|^<head|^<body|^<!--/i.test(t)) return true;
+  try {
+    JSON.parse(t);
+    return false;
+  } catch {
+    return t.startsWith('<');
+  }
+}
+function isLoginWall(text) {
+  try {
+    const json = JSON.parse(text);
+    return Boolean(json.login_url) || /session/i.test(String(json.reason || json.error || ''));
+  } catch {
+    return /<form[^>]*login|href="\/login"/i.test(String(text || ''));
+  }
+}
+const DASHBOARD_HINT = "That address is Hermes's web dashboard (its port is usually 9119), which only answers to a browser login. The app needs Hermes's API server instead, usually port 8642, with the container's API_SERVER_KEY.";
+
 // Splits server-sent events out of a buffer: [{ event, data }], plus whatever
 // partial event is left over. Comment lines (": keepalive") are skipped.
 function parseEvents(buffer) {
@@ -277,4 +309,4 @@ function toChatEvent({ event, data }) {
 // (/config/hermes.json), then HERMES_URL / HERMES_API_KEY / HERMES_MODEL,
 // then a running container named "hermes" found through Docker.
 
-module.exports = { cleanMessage, cleanImages, withImages, toSession, toSessionDetail, toModelOptions, toolArgs, toTranscript, cleanUrl, parseEvents, toChatEvent };
+module.exports = { cleanMessage, cleanImages, withImages, toSession, toSessionDetail, toModelOptions, toolArgs, toTranscript, cleanUrl, parseEvents, toChatEvent, modelFrom, isPage, isLoginWall, DASHBOARD_HINT };
