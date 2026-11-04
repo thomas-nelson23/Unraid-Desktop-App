@@ -36,7 +36,46 @@ function statusOf(conn) {
   return conn.reason === 'offline' ? STATUS.offline : STATUS.none;
 }
 
-export default function TopBar({ conn, server, onConnect, children }) {
+// A newer build of the app, one click from installed. While it installs the
+// pill shows how far along it is; if that fails it says so and opens Settings.
+function UpdatePill({ updater, onPage }) {
+  const { available, progress, error, note, install } = updater;
+  if (!available && !progress && !error && !note) return null;
+  if (progress) {
+    return (
+      <span className="lcd update busy" title={progress.text}>
+        <span className="led on" />
+        {progress.pct != null ? `UPDATING · ${progress.pct}%` : 'UPDATING…'}
+        {progress.pct != null && <i style={{ width: `${progress.pct}%` }} />}
+      </span>
+    );
+  }
+  if (error) {
+    return (
+      <button className="lcd update failed" onClick={() => onPage('settings')} title={error}>
+        <span className="led bad" />
+        UPDATE FAILED · DETAILS
+      </button>
+    );
+  }
+  if (note) {
+    return (
+      <button className="lcd update" onClick={() => onPage('settings')} title={note}>
+        <span className="led ok" />
+        UPDATE DOWNLOADED · DETAILS
+      </button>
+    );
+  }
+  if (!available) return null;
+  return (
+    <button className="lcd update" onClick={() => install(available.branch)} title={`${available.title}\n${available.notes || ''}\nClick to install and restart.`}>
+      <span className="led on" />
+      UPDATE READY · {available.sha.slice(0, 7)}
+    </button>
+  );
+}
+
+export default function TopBar({ conn, server, updater, onConnect, onPage, children }) {
   const status = statusOf(conn);
   const host = server?.host;
   const gpu = host?.gpus?.[0];
@@ -59,6 +98,7 @@ export default function TopBar({ conn, server, onConnect, children }) {
         </div>
       )}
       <span className="spacer" />
+      {updater && <UpdatePill updater={updater} onPage={onPage} />}
       {children}
     </header>
   );

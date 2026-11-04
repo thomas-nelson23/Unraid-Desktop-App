@@ -58,12 +58,14 @@ contextBridge.exposeInMainWorld('cubecrusher', {
     setPlace: call('weather:setPlace'),
   },
   updates: {
-    setToken: call('updates:setToken'),
+    running: call('updates:running'),
+    check: call('updates:check'),
     branches: call('updates:branches'),
     latest: call('updates:latest'),
     install: call('updates:install'),
     cancel: call('updates:cancel'),
     busy: call('updates:busy'),
     onProgress: listen('updates:progress'),
+    onAvailable: listen('updates:available'),
   },
 });

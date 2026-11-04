@@ -13,6 +13,7 @@ import { checkConnection, desktop, usePoll, usePollFn } from './lib/api.js';
 import { demoContainerCount, demoNeeds, demoServer } from './lib/demo.js';
 import { needsFromServer } from './lib/needs.js';
 import { useServerHistory } from './lib/history.js';
+import { useUpdates } from './lib/updater.js';
 
 const EMPTY_HERMES = { instances: [], current: null, status: [] };
 
@@ -47,6 +48,7 @@ export default function App() {
   const [hermesTab, setHermesTab] = useState('agents');
   const [draft, setDraft] = useState('');
   const hermes = useHermesList();
+  const updater = useUpdates();
   // The VMs page stays open once visited, so its screens stay connected.
   const [remoteOpen, setRemoteOpen] = useState(false);
   useEffect(() => {
@@ -95,7 +97,7 @@ export default function App() {
   // Array & disks is a tab of Overview; its page id opens that tab.
   else if (page === 'overview' || page === 'array') content = <Overview conn={conn} server={server} history={history} tab={page} onTab={setPage} onAsk={askHermes} />;
   else if (page === 'docker') content = <Docker conn={conn} onPage={setPage} />;
-  else if (page === 'settings') content = <Settings conn={conn} onConnect={() => setConnecting(true)} onChanged={refresh} hermesList={hermes.list} onHermesChanged={hermes.refresh} />;
+  else if (page === 'settings') content = <Settings conn={conn} onConnect={() => setConnecting(true)} onChanged={refresh} hermesList={hermes.list} onHermesChanged={hermes.refresh} updater={updater} />;
   else if (page !== 'vms') content = <NotBuilt page={page} />;
 
   return (
@@ -103,7 +105,7 @@ export default function App() {
       <div className="glow" aria-hidden="true" />
       <Sidebar page={page} onPage={setPage} counts={counts} />
       <main className="main">
-        <TopBar conn={conn} server={server} onConnect={() => (desktop ? setPage('settings') : setConnecting(true))}>
+        <TopBar conn={conn} server={server} updater={updater} onConnect={() => (desktop ? setPage('settings') : setConnecting(true))} onPage={setPage}>
           {conn.state !== 'live' && (
             <button className="btn md" onClick={() => (conn.state === 'signin' ? setConnecting(true) : desktop ? setPage('settings') : setConnecting(true))}>
               {conn.state === 'signin' ? 'Sign in' : 'Set up'}

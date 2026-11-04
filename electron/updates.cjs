@@ -1,5 +1,5 @@
 const { app, net, shell } = require('electron');
-const { execFile } = require('node:child_process');
+const { execFile, spawn } = require('node:child_process');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
@@ -7,25 +7,35 @@ const { pipeline } = require('node:stream/promises');
 const { Readable, Transform } = require('node:stream');
 const { createWriteStream } = require('node:fs');
 const settings = require('./settings.cjs');
+const { builds, latestFor, isNewer } = require('./updatesShape.cjs');
 
-// In-app updates from GitHub Actions: pick a branch, fetch its latest build
-// and install it. Builds are workflow artifacts, which GitHub only hands out
-// to a signed-in user, so a token with repo access is needed even for a
-// public repository.
-const WORKFLOW = 'build.yml';
+// In-app updates from GitHub Releases. Every push publishes one with the
+// installers attached (see .github/workflows/build.yml); the repository is
+// public, so they're fetched with no token. The app checks its own branch
+// at startup and every hour and tells the page when there's a newer build,
+// and Settings lets any branch's build be installed.
+const API = process.env.CUBECRUSHER_GITHUB_API || 'https://api.github.com';
 const ARCH = process.arch === 'arm64' ? 'arm64' : 'x64';
-// The artifact names this computer can install, best first. Newer builds
-// upload a small zip per Mac chip; older ones only the big all-in-one.
-const ARTIFACTS = { darwin: [`cubecrusher-mac-${ARCH}`, 'cubecrusher-mac'], win32: ['cubecrusher-win'], linux: ['cubecrusher-linux'] }[process.platform] || [];
 // A download that moves no bytes for this long is given up on.
 const STALL = 60_000;
+const CHECK_EVERY = 60 * 60 * 1000;
+const FIRST_CHECK = 15_000;
 
-function pickArtifact(artifacts) {
-  for (const name of ARTIFACTS) {
-    const a = (artifacts || []).find((x) => x.name === name && !x.expired);
-    if (a) return a;
-  }
-  return null;
+// How this Linux install can be replaced: an AppImage is swapped in place;
+// a pacman install (under /opt) is upgraded with the new package.
+function linuxKind() {
+  if (process.env.APPIMAGE) return 'appimage';
+  if (process.execPath.startsWith('/opt/')) return 'pacman';
+  return 'appimage';
+}
+const WANT = { platform: process.platform, arch: ARCH, kind: process.platform === 'linux' ? linuxKind() : undefined };
+
+// Which build this is: written next to the page by the build (vite.config.js).
+let running = { branch: 'dev', sha: '', at: '' };
+try {
+  running = { ...running, ...require(path.join(__dirname, '..', 'dist', 'build.json')) };
+} catch {
+  // Running from source, with no build.
 }
 
 const mb = (n) => `${Math.round(n / 1e6)} MB`;
@@ -35,66 +45,66 @@ const run = (cmd, args) =>
 
 async function gh(apiPath) {
   const { github } = settings.get();
-  if (!github.token) throw new Error('Add a GitHub token under Settings to check for builds.');
-  const res = await net.fetch(`https://api.github.com/repos/${github.owner}/${github.repo}${apiPath}`, {
-    headers: { Authorization: `Bearer ${github.token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
-    signal: AbortSignal.timeout(20_000),
-  });
+  let res;
+  try {
+    res = await net.fetch(`${API}/repos/${github.owner}/${github.repo}${apiPath}`, {
+      headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
+      signal: AbortSignal.timeout(20_000),
+    });
+  } catch (err) {
+    throw new Error(`Can't reach GitHub (${err.cause?.code || err.message}).`);
+  }
   if (!res.ok) {
     let why = '';
     try {
       why = (await res.json()).message || '';
     } catch {}
     const said = why ? ` GitHub said: "${why}".` : '';
-    if (res.status === 401) throw new Error(`GitHub refused the token (401) on ${apiPath}.${said} Check it was pasted whole, hasn't expired, and is a classic token with the "repo" scope or a fine-grained one with Contents and Actions read access to ${github.owner}/${github.repo}.`);
-    if (res.status === 403) throw new Error(`GitHub wouldn't allow ${apiPath} with this token (403).${said} A fine-grained token needs Actions read access for builds.`);
-    if (res.status === 404) throw new Error(`GitHub can't see ${github.owner}/${github.repo} with this token (404).${said}`);
-    throw new Error(`GitHub answered ${res.status} on ${apiPath}.${said}`);
+    if (res.status === 403 || res.status === 429) throw new Error(`GitHub is rate-limiting update checks from this address for a while (${res.status}).${said}`);
+    if (res.status === 404) throw new Error(`GitHub can't find ${github.owner}/${github.repo} (404).${said}`);
+    throw new Error(`GitHub answered ${res.status}.${said}`);
   }
   return res.json();
 }
 
-async function branches() {
-  const list = await gh('/branches?per_page=100');
-  return list.map((b) => b.name).sort();
+// The releases, kept a minute so the page and the hourly check don't ask twice.
+let cached = { at: 0, list: null };
+async function releases(fresh = false) {
+  if (!fresh && cached.list && Date.now() - cached.at < 60_000) return cached.list;
+  const list = await gh('/releases?per_page=100');
+  cached = { at: Date.now(), list };
+  return list;
 }
 
-// The newest build on a branch that has this computer's installer. A run
-// that failed (or whose upload didn't make it) is skipped, and the page is
-// told when the very latest one is in that state.
-async function latest(branch) {
-  const runs = await gh(`/actions/workflows/${WORKFLOW}/runs?branch=${encodeURIComponent(branch)}&per_page=8`);
-  const all = runs.workflow_runs || [];
-  const done = all.filter((r) => r.status === 'completed');
-  const describe = (r, artifact) => ({ id: r.id, sha: r.head_sha, title: r.display_title, at: r.updated_at, conclusion: r.conclusion, url: r.html_url, ready: Boolean(artifact), size: artifact?.size_in_bytes || 0 });
-  let newest = null;
-  for (const r of done) {
-    const { artifacts } = await gh(`/actions/runs/${r.id}/artifacts`);
-    const artifact = pickArtifact(artifacts);
-    if (artifact) {
-      const run = describe(r, artifact);
-      // Say when a newer push has no installer, so a failed build isn't mistaken for "up to date".
-      return { branch, run, newer: newest, building: all.find((x) => x.status !== 'completed') ? true : false };
-    }
-    if (!newest) newest = describe(r, null);
+const branches = async (fresh) => builds(await releases(fresh)).branches;
+
+// Whether the workflow is building this branch right now (public too).
+async function building(branch) {
+  try {
+    const { total_count: n } = await gh(`/actions/workflows/build.yml/runs?branch=${encodeURIComponent(branch)}&status=in_progress&per_page=1`);
+    return n > 0;
+  } catch {
+    return false;
   }
-  return { branch, run: null, newer: newest, building: all.some((x) => x.status !== 'completed') };
 }
 
-// GitHub answers an artifact download with a redirect to a signed storage
-// URL, which refuses the token if it's still attached. So the redirect is
-// followed by hand, without the Authorization header. Progress goes back to
-// the page as bytes land, and a download that stops moving is given up on
-// instead of sitting there for ever.
+// The newest build on a branch that has this computer's installer.
+async function latest(branch, fresh = false) {
+  const { run: build, newer } = latestFor(await releases(fresh), branch, WANT);
+  return { branch, run: build, newer, building: !build || newer ? await building(branch) : false, running };
+}
+
+// A plain download with progress, given up on when nothing arrives for a
+// while instead of sitting there for ever.
 async function download(url, to, { report, signal, size }) {
-  const { github } = settings.get();
-  let res = await fetch(url, { headers: { Authorization: `Bearer ${github.token}`, Accept: 'application/vnd.github+json' }, redirect: 'manual', signal });
-  for (let hop = 0; hop < 5 && res.status >= 300 && res.status < 400; hop++) {
-    const next = res.headers.get('location');
-    if (!next) break;
-    res = await fetch(next, { redirect: 'manual', signal });
+  let res;
+  try {
+    res = await fetch(url, { signal });
+  } catch (err) {
+    if (signal?.aborted) throw new Error('Download cancelled.');
+    throw new Error(`The download couldn't start (${err.cause?.code || err.message}).`);
   }
-  if (!res.ok) throw new Error(`The download failed (HTTP ${res.status}${res.status === 401 || res.status === 403 ? ', the token was refused for the download' : ''}).`);
+  if (!res.ok) throw new Error(`The download failed (HTTP ${res.status}).`);
   const total = Number(res.headers.get('content-length')) || size || 0;
   let got = 0;
   let moved = Date.now();
@@ -135,20 +145,18 @@ async function download(url, to, { report, signal, size }) {
 async function unzip(file, dir) {
   await fs.mkdir(dir, { recursive: true });
   if (process.platform === 'darwin') return run('ditto', ['-x', '-k', file, dir]);
-  if (process.platform === 'win32') return run('tar', ['-xf', file, '-C', dir]);
   return run('unzip', ['-o', '-q', file, '-d', dir]);
 }
 
 // Swaps the running .app for the new one and relaunches. The new bundle is
 // signed ad hoc and cleared of quarantine first, so macOS doesn't call it damaged.
-async function installMac(dir, report) {
-  const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
-  const inner = (await fs.readdir(dir)).find((f) => f.endsWith(`-${arch}-mac.zip`));
-  if (!inner) throw new Error(`The build has no Mac zip for ${arch}.`);
+async function installMac(file, dir, report) {
   report('Unpacking the app…');
   const appDir = path.join(dir, 'app');
-  await unzip(path.join(dir, inner), appDir);
-  const bundle = path.join(appDir, (await fs.readdir(appDir)).find((f) => f.endsWith('.app')));
+  await unzip(file, appDir);
+  const name = (await fs.readdir(appDir)).find((f) => f.endsWith('.app'));
+  if (!name) throw new Error('The download has no app in it.');
+  const bundle = path.join(appDir, name);
   await run('xattr', ['-cr', bundle]);
   await run('codesign', ['--force', '--deep', '-s', '-', bundle]);
   const target = path.resolve(app.getPath('exe'), '..', '..', '..');
@@ -168,45 +176,58 @@ async function installMac(dir, report) {
   return { relaunch: true };
 }
 
-async function installLinux(dir, report) {
-  const image = (await fs.readdir(dir)).find((f) => f.endsWith('.AppImage'));
-  if (!image) throw new Error('The build has no AppImage.');
+async function installAppImage(file, dir, report) {
   const current = process.env.APPIMAGE;
   if (!current) {
-    await shell.openPath(dir);
+    shell.openPath(dir).catch(() => {});
     return { relaunch: false, note: `Not running from an AppImage, so the new one is in ${dir}.` };
   }
   report('Replacing the AppImage…');
-  await fs.copyFile(path.join(dir, image), `${current}.new`);
+  await fs.copyFile(file, `${current}.new`);
   await fs.chmod(`${current}.new`, 0o755);
   await fs.rename(`${current}.new`, current);
   await fs.rm(dir, { recursive: true, force: true });
   return { relaunch: true };
 }
 
-async function installWindows(dir) {
-  const exe = (await fs.readdir(dir)).find((f) => f.endsWith('.exe'));
-  if (!exe) throw new Error('The build has no Windows installer.');
-  await shell.openPath(path.join(dir, exe));
-  return { relaunch: false, quit: true, note: 'The installer is open. It replaces the app; start Cubecrusher again when it finishes.' };
+// Upgrades a pacman install with the new package. pkexec asks for the
+// password in a window; without it the package is left to install by hand.
+async function installPacman(file, dir, report) {
+  const have = async (p) => fs.access(p).then(() => true, () => false);
+  if (!(await have('/usr/bin/pkexec')) || !(await have('/usr/bin/pacman'))) {
+    shell.openPath(dir).catch(() => {});
+    return { relaunch: false, note: `The package is in ${dir}; install it with: sudo pacman -U ${path.basename(file)}` };
+  }
+  report('Installing the package (enter your password when asked)…');
+  try {
+    await run('/usr/bin/pkexec', ['/usr/bin/pacman', '-U', '--noconfirm', file]);
+  } catch (err) {
+    if (/dismissed|not authorized|cancel/i.test(err.message)) throw new Error('The password prompt was cancelled, so the update was not installed.');
+    throw new Error(`pacman couldn't install the package: ${err.message}`);
+  }
+  await fs.rm(dir, { recursive: true, force: true });
+  return { relaunch: true };
+}
+
+// Runs the Windows installer quietly; it replaces the app and starts it again.
+async function installWindows(file) {
+  const child = spawn(file, ['/S', '--force-run'], { detached: true, stdio: 'ignore' });
+  child.unref();
+  return { relaunch: false, quit: true, note: 'Installing… Cubecrusher closes and comes back on its own.' };
 }
 
 async function install(branch, report, signal) {
-  const { run: build } = await latest(branch);
+  const { run: build } = await latest(branch, true);
   if (!build?.ready) throw new Error(`No finished build for ${branch} yet.`);
-  const { artifacts } = await gh(`/actions/runs/${build.id}/artifacts`);
-  const artifact = pickArtifact(artifacts);
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cubecrusher-update-'));
   try {
-    report(`Starting the download of ${branch} @ ${build.sha.slice(0, 7)} (${mb(artifact.size_in_bytes)})…`);
-    const zip = path.join(dir, 'artifact.zip');
-    await download(artifact.archive_download_url, zip, { report, signal, size: artifact.size_in_bytes });
-    report('Unpacking…');
-    await unzip(zip, dir);
-    await fs.rm(zip, { force: true });
-    if (process.platform === 'darwin') return await installMac(dir, report);
-    if (process.platform === 'linux') return await installLinux(dir, report);
-    return await installWindows(dir);
+    report(`Starting the download of ${branch} @ ${build.sha.slice(0, 7)} (${mb(build.size)})…`);
+    const file = path.join(dir, build.asset.name);
+    await download(build.asset.url, file, { report, signal, size: build.size });
+    if (process.platform === 'darwin') return await installMac(file, dir, report);
+    if (process.platform === 'win32') return await installWindows(file);
+    if (WANT.kind === 'pacman') return await installPacman(file, dir, report);
+    return await installAppImage(file, dir, report);
   } catch (err) {
     await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
     throw err;
@@ -215,23 +236,38 @@ async function install(branch, report, signal) {
 
 // The one update allowed at a time, with the handle that cancels it.
 let installing = null;
+// The newer build on this app's own branch, if the last check found one.
+let available = null;
 
 function register(ipcMain, getWindow) {
-  const report = (text, pct = null) => {
+  const send = (channel, payload) => {
     const win = getWindow();
-    if (win && !win.isDestroyed()) win.webContents.send('updates:progress', { text, pct });
+    if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
   };
-  ipcMain.handle('updates:setToken', async (_e, token) => {
-    await settings.update({ github: { ...settings.get().github, token: String(token || '').trim() } });
-    return settings.forPage().github;
-  });
-  ipcMain.handle('updates:branches', () => branches());
-  ipcMain.handle('updates:latest', (_e, branch) => latest(branch));
+  const report = (text, pct = null) => send('updates:progress', { text, pct });
+
+  // Looks at this app's own branch and tells the page when a newer build is out.
+  const check = async (fresh = true) => {
+    if (!running.sha || running.branch === 'dev') return { available: null, running };
+    const { run: build } = await latest(running.branch, fresh);
+    available = isNewer(build, running) ? build : null;
+    send('updates:available', available);
+    return { available, running };
+  };
+  if (running.sha && running.branch !== 'dev' && !process.env.CUBECRUSHER_NO_UPDATE_CHECK) {
+    setTimeout(() => check().catch(() => {}), process.env.CUBECRUSHER_FIRST_CHECK_MS ? Number(process.env.CUBECRUSHER_FIRST_CHECK_MS) : FIRST_CHECK).unref?.();
+    setInterval(() => check().catch(() => {}), CHECK_EVERY).unref?.();
+  }
+
+  ipcMain.handle('updates:running', () => running);
+  ipcMain.handle('updates:check', (_e, fresh) => check(fresh !== false));
+  ipcMain.handle('updates:branches', (_e, fresh) => branches(Boolean(fresh)));
+  ipcMain.handle('updates:latest', (_e, branch, fresh) => latest(branch, Boolean(fresh)));
   ipcMain.handle('updates:install', async (_e, branch) => {
     if (installing) throw new Error('An update is already running. Cancel it first.');
     installing = new AbortController();
     try {
-      const out = await install(branch, report, installing.signal);
+      const out = await install(branch || running.branch, report, installing.signal);
       if (out.relaunch) {
         app.relaunch();
         setTimeout(() => app.exit(0), 300);
