@@ -151,7 +151,13 @@ async function test({ url: rawUrl, key, id, profile }) {
     throw new Error(`Can't reach ${url} (${err.cause?.code || err.message}).`);
   }
   const text = (await res.text().catch(() => '')).slice(0, 2000);
+  // A named profile only takes its own key: the default profile's key is
+  // refused under /p/<profile>/.
+  const named = PROFILE.test(String(profile || '').trim());
+  if ((res.status === 401 || res.status === 403) && named)
+    throw new Error(`The "${String(profile).trim()}" profile refused this key (${res.status}). A named profile needs its own API_SERVER_KEY, set in that profile's .env (inside the container: \$HERMES_HOME/profiles/${String(profile).trim()}/.env), then restart Hermes. The default profile's key doesn't work for it.`);
   if (res.status === 401 || res.status === 403) throw new Error(`Hermes refused the key (${res.status})${useKey ? '' : ', and no key was sent'}. It answered: ${text.slice(0, 200) || '(nothing)'}`);
+  if (res.status === 404 && named) throw new Error(`No "${String(profile).trim()}" profile answers at ${url}. Check the name, and that Hermes has gateway.multiplex_profiles turned on.`);
   if (!res.ok) throw new Error(`Hermes answered ${res.status}: ${text.slice(0, 200) || '(nothing)'}`);
   // The web dashboard answers any path with its page, which isn't an answer.
   if (isPage(text)) throw new Error(DASHBOARD_HINT);
