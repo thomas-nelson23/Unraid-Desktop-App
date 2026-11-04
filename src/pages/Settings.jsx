@@ -1,3 +1,4 @@
+import { ComfySetup } from './ai/Studio.jsx';
 import { useEffect, useState } from 'react';
 import { desktop, usePoll } from '../lib/api.js';
 import { ago } from '../lib/format.js';
@@ -239,7 +240,7 @@ function HermesInstances({ hermesList, onChanged, live }) {
         <h3 className="h4">Hermes instances</h3>
         <span className="eyebrow">{rows.length === 1 ? '1 instance' : `${rows.length} instances`}</span>
       </div>
-      <p className="soft">Each Hermes Agent container, with the address of its API server and its key. The Hermes page switches between them.</p>
+      <p className="soft">Each Hermes Agent container, with the address of its API server and its key. The AI page switches between them.</p>
       <form className="form" onSubmit={submit}>
         {rows.map((h, i) => (
           <div className="inst" key={h.id}>
@@ -538,6 +539,7 @@ export default function Settings({ conn, onConnect, onChanged, hermesList, onHer
             />
           )}
           <HermesInstances hermesList={hermesList} onChanged={onHermesChanged} live={dash.state === 'live'} />
+          <ComfySetup />
           <DockerServers />
           {settings && updater && <Updates updater={updater} />}
         </>

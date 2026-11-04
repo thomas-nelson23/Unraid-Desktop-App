@@ -7,7 +7,7 @@ export const inElectron = Boolean(bridge);
 
 // The desktop-only parts: Hermes instances, Docker servers and updates. In a
 // plain browser they are null and the pages say so.
-export const desktop = bridge ? { hermes: bridge.hermes, docker: bridge.docker, updates: bridge.updates, unraid: bridge.unraid, weather: bridge.weather, platform: bridge.platform } : null;
+export const desktop = bridge ? { hermes: bridge.hermes, comfy: bridge.comfy, docker: bridge.docker, updates: bridge.updates, unraid: bridge.unraid, weather: bridge.weather, platform: bridge.platform } : null;
 export const openExternal = (url) => (bridge ? bridge.openExternal(url) : window.open(url, '_blank', 'noopener'));
 
 export class ApiError extends Error {

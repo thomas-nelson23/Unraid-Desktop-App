@@ -1,7 +1,7 @@
 // The sidebar, in the order of the approved Home design. `built` pages have
 // a real screen; the rest show what's coming.
 export const NAV = [
-  { items: [{ id: 'home', label: 'Home', built: true }, { id: 'hermes', label: 'Hermes', built: true }] },
+  { items: [{ id: 'home', label: 'Home', built: true }, { id: 'hermes', label: 'AI', built: true }] },
   {
     title: 'Server',
     items: [

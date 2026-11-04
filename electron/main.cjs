@@ -7,6 +7,7 @@ const docker = require('./docker.cjs');
 const unraid = require('./unraid.cjs');
 const weather = require('./weather.cjs');
 const updates = require('./updates.cjs');
+const comfy = require('./comfy.cjs');
 
 let win = null;
 
@@ -31,6 +32,7 @@ docker.register(ipcMain);
 unraid.register(ipcMain);
 weather.register(ipcMain);
 updates.register(ipcMain, () => win);
+comfy.register(ipcMain, () => win);
 
 // The VMs page's screens are WebSockets straight from the page to the server.
 // The page isn't served by the server, so the browser would send neither the

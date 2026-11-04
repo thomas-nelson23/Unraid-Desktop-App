@@ -13,6 +13,7 @@ const DEFAULTS = {
   hermes: [],
   hermesCurrent: null,
   servers: [],
+  comfyUrl: '',
   github: { owner: 'thomas-nelson23', repo: 'unraid-desktop-app' },
 };
 
@@ -57,6 +58,7 @@ function forPage() {
     hermes: settings.hermes.map(({ key, ...h }) => ({ ...h, hasKey: Boolean(key) })),
     hermesCurrent: settings.hermesCurrent,
     servers: settings.servers,
+    comfyUrl: settings.comfyUrl || '',
     github: { owner: settings.github.owner, repo: settings.github.repo },
   };
 }
